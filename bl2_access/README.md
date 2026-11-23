@@ -82,7 +82,7 @@ name, how many points you have in it out of the maximum, and its description. F8
   straight at the target. Where the level's navigation mesh gives a walking route, it follows that. Otherwise the mod
   plans its own: it searches the area around you, a metre at a time, testing with line traces where you can walk, and
   finds the way through. It takes well under a second, and the search is spread over frames so the game doesn't
-  stutter. The beacon then leads you along that route. If you get snagged, it plans again from where you are.
+  stutter. The beacon then leads you along that route. When it has one it says "Route found" and the length. If it can't see the whole way yet, for example to a target inside a building whose door it hasn't found, it says "Heading toward it, searching for the way in", leads you as close as it can, and searches a wider area from there. Far from the target it plans in larger steps, and within 35 m in one-metre steps that find doorways. It also handles stairs. If you keep walking without getting any further along the route, or get snagged, it says "Recalculating" and plans again from where you are.
 
 **Lock-on navigation** (off by default; Navigation options, or the accessibility settings) turns you to face the way to go
 when you hold the modifier and click the right stick, or press the apostrophe key. It turns toward the beacon's target if

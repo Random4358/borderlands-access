@@ -26,7 +26,7 @@ Point = tuple[float, float, float]
 CELL = 90.0          # uu between grid points (doorways are 120 or more wide)
 KNEE = 50.0          # trace heights above the floor
 CHEST = 130.0
-STEP_UP = 60.0       # highest floor rise between neighbours that still counts as walkable
+STEP_UP = 70.0       # highest floor rise between neighbours that still counts as walkable (stairs)
 DROP = 80.0          # deepest floor drop between neighbours that still counts as walkable
 MAX_CELLS = 1600     # search limit (about a 40 m wide area)
 NEIGHBOURS = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)]
@@ -41,13 +41,21 @@ class GridPlanner:
         self._job: Iterator[None] | None = None
         self._spent = 0
         self.cells_searched = 0
+        self.cell = CELL
+        self.max_cells = MAX_CELLS
+        self.best_gap = 0.0       # how far the end of the path is from the target (uu)
+        self.runs = 0             # increases each time a search finishes
 
     # ------------------------------------------------------------ public
-    def start(self, feet: Point, goal: Point) -> None:
+    def start(self, feet: Point, goal: Point, cell: float = CELL, max_cells: int | None = None) -> None:
+        """Begin a search. `cell` is the grid spacing (coarser for long walks outdoors);
+        `max_cells` the search limit (larger when an earlier search couldn't get close)."""
         self.goal = goal
         self.state = "running"
         self.path = []
         self.cells_searched = 0
+        self.cell = cell
+        self.max_cells = max_cells or MAX_CELLS
         self._job = self._search(feet, goal)
 
     def step(self, budget: int = 120) -> str:
@@ -84,6 +92,7 @@ class GridPlanner:
     # ------------------------------------------------------------ the search (a generator: yields to share time)
     def _search(self, feet: Point, goal: Point) -> Iterator[None]:
         ox, oy, oz = feet
+        CELL = self.cell
 
         def centre(c: tuple[int, int]) -> tuple[float, float]:
             return ox + c[0] * CELL, oy + c[1] * CELL
@@ -109,11 +118,13 @@ class GridPlanner:
             hc = h(cur)
             if hc < best_h:
                 best, best_h = cur, hc
+            # Reached: on the target, or right beside it at about its height (the target itself is
+            # often inside furniture or a wall, so the last metre can't be walked).
             if hc <= CELL * 0.75 or (hc <= CELL * 1.5 and abs(goal[2] - z[cur]) < 250):
                 best = cur
-                self._finish(best, parent, z, centre, reached=True)
+                self._finish(best, parent, z, centre, reached=True, gap=hc)
                 return
-            if len(closed) >= MAX_CELLS:
+            if len(closed) >= self.max_cells:
                 break
             cx, cy = centre(cur)
             cz = z[cur]
@@ -122,30 +133,34 @@ class GridPlanner:
                 if nb in closed:
                     continue
                 nx, ny = centre(nb)
-                # Walkable step: nothing in the way at knee or chest height, floor at the other end.
-                if self._t((cx, cy, cz + KNEE), (nx, ny, cz + KNEE)) is not True:
-                    yield from self._pause()
-                    continue
-                if self._t((cx, cy, cz + CHEST), (nx, ny, cz + CHEST)) is not True:
-                    yield from self._pause()
-                    continue
+                # Walkable step: floor at the other end (no drop, at most a stair step up), then
+                # nothing in the way at knee or chest height between the two floor heights.
                 nz = self._floor(nx, ny, cz)
-                yield from self._pause()
                 if nz is None:
+                    yield from self._pause()
                     continue
+                if self._t((cx, cy, cz + KNEE), (nx, ny, nz + KNEE)) is not True:
+                    yield from self._pause()
+                    continue
+                if self._t((cx, cy, cz + CHEST), (nx, ny, nz + CHEST)) is not True:
+                    yield from self._pause()
+                    continue
+                yield from self._pause()
                 cost = gc + (CELL * (1.414 if dx and dy else 1.0))
                 if cost < g.get(nb, 1e18):
                     g[nb] = cost
                     z[nb] = nz
                     parent[nb] = cur
                     heapq.heappush(open_heap, (cost + h(nb), cost, nb))
-        self._finish(best, parent, z, centre, reached=False)
+        self._finish(best, parent, z, centre, reached=False, gap=best_h)
 
     def _pause(self) -> Iterator[None]:
         if self._spent >= self._budget:
             yield None
 
-    def _finish(self, end, parent, z, centre, reached: bool) -> None:
+    def _finish(self, end, parent, z, centre, reached: bool, gap: float = 0.0) -> None:
+        self.best_gap = gap
+        self.runs += 1
         cells = []
         c = end
         while c is not None:

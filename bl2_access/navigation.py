@@ -43,6 +43,10 @@ LOOK_AHEAD = 1500.0     # uu: how much of the straight line must be clear to hea
 STEER_ANGLES = (25, 45, 65, 90, 115, 140)  # degrees either side of the straight line
 STUCK_SECONDS = 3.0     # walking this long without getting 0.4 m closer = try the other side
 LEAD = 0.1              # seconds of beacon tone queued ahead
+FAR = 3500.0           # uu: beyond this the planner uses a coarse grid (35 m)
+PLAN_CELLS = 2500      # planner search limit, doubled (up to 4x) when a partial route stalls
+PLAN_BUDGET = 120      # line traces the planner may use per frame
+PROGRESS_SECONDS = 8.0 # moving without getting further along the route this long = re-plan
 BEACON_BASE = 56        # 700 Hz at the same height as you
 
 
@@ -85,6 +89,9 @@ class Route:
         self.planner = None                  # GridPlanner, made when first needed
         self.replan_at = 0.0
         self.plan_logged = ""
+        self.path: list = []                 # the route being followed (kept while re-planning)
+        self.path_kind = ""                  # "done" (reaches the target) or "partial"
+        self.path_cell = 90.0
         self.noted: set[str] = set()
 
     def reset(self) -> None:
@@ -92,6 +99,7 @@ class Route:
         self.steer, self.next_steer, self.side, self.side_until, self.progress = None, 0.0, 0, 0.0, None
         self.stuck_since, self.forced_until = None, 0.0
         self.planner, self.replan_at, self.plan_logged = None, 0.0, ""
+        self.path, self.path_kind, self.path_cell = [], "", 90.0
 
     def _note(self, text: str) -> None:
         if text in self.noted:
@@ -132,8 +140,17 @@ class Route:
                    f"you at ({eye[0]:.0f}, {eye[1]:.0f}, {eye[2]:.0f})")
 
     def _planned(self, pawn: Any, target_pos: tuple, now: float) -> tuple | None:
-        """The next point on the route planner's path, planning or re-planning as needed."""
-        from .planner import CELL, GridPlanner, follow
+        """The next point on the planned route, planning and re-planning as needed.
+
+        * Far from the target (over 35 m) the search uses a coarse 1.8 m grid, enough for open
+          ground; within 35 m it uses the fine 0.9 m grid that finds doorways.
+        * The route being followed is kept while a new one is worked out.
+        * If a search can't reach the target, you're led as close as it got; when you get there
+          and the next search gets no closer, the search area is doubled (up to 4 times).
+        * If you keep walking without getting closer along the route for 8 s, it re-plans and
+          says "Recalculating".
+        """
+        from .planner import GridPlanner, follow
 
         loc = game.location(pawn)
         feet = game.feet_z(pawn)
@@ -142,40 +159,97 @@ class Route:
         here = (loc[0], loc[1], feet)
         if self.planner is None:
             self.planner = GridPlanner(lambda a, b: game.fast_trace(pawn, a, b))
+            self.path, self.path_kind, self.limit, self.last_gap = [], "", PLAN_CELLS, None
+            self.runs_seen, self.watch, self.announced = 0, None, False
         pl = self.planner
-        off_route = bool(pl.path) and min(math.dist(here[:2], q[:2]) for q in pl.path) > CELL * 2.5
-        at_end = bool(pl.path) and math.dist(here[:2], pl.path[-1][:2]) < CELL and pl.state == "partial"
-        if pl.state == "idle" or (pl.state != "running" and (now >= self.replan_at or off_route or at_end)):
-            pl.start(here, target_pos)
-            self.replan_at = now + 4.0
-        pl.step(120)
-        if pl.state in ("done", "partial") and self.plan_logged != f"{pl.state}{len(pl.path)}":
-            self.plan_logged = f"{pl.state}{len(pl.path)}"
-            length = sum(math.dist(a[:2], b[:2]) for a, b in zip(pl.path, pl.path[1:])) / 100
-            self._note(f"route planner: {'path to the target' if pl.state == 'done' else 'partial path toward the target'}, "
-                       f"{length:.0f} m, {pl.cells_searched} points searched")
-        elif pl.state == "failed":
-            self._note("route planner: no walkable way found from here")
-        if pl.state not in ("done", "partial"):
+        far = math.dist(here[:2], target_pos[:2]) > FAR
+        cell = 180.0 if far else 90.0
+        path = self.path
+        off_route = bool(path) and min(math.dist(here[:2], q[:2]) for q in path) > cell * 2.5
+        at_end = bool(path) and self.path_kind == "partial" and math.dist(here[:2], path[-1][:2]) < cell * 1.2
+        grain_changed = bool(path) and (cell != self.path_cell)
+        if pl.state != "running" and (not path or now >= self.replan_at or off_route or at_end or grain_changed):
+            pl.start(here, target_pos, cell=cell, max_cells=self.limit)
+            self.replan_at = now + 8.0
+        pl.step(PLAN_BUDGET)
+        if pl.runs != self.runs_seen and pl.state in ("done", "partial", "failed"):
+            self.runs_seen = pl.runs
+            self._take_plan(pl, here, now)
+        if not self.path:
             return None
+        self._watch_progress(here, now)
 
         def visible(q: tuple) -> bool:
             return all(game.fast_trace(pawn, (here[0], here[1], here[2] + h), (q[0], q[1], q[2] + h)) is not False
                        for h in (50.0, 130.0))
 
-        nxt = follow(pl.path, here, visible)
+        nxt = follow(self.path, here, visible)
         if nxt is None:
             return None
-        if pl.state == "done" and nxt == pl.path[-1]:
+        if self.path_kind == "done" and nxt == self.path[-1]:
             return target_pos
         return (nxt[0], nxt[1], nxt[2] + 100)
 
+    def _take_plan(self, pl: Any, here: tuple, now: float) -> None:
+        from .speech import speech
+
+        length = sum(math.dist(a[:2], b[:2]) for a, b in zip(pl.path, pl.path[1:])) / 100
+        if pl.state == "failed":
+            self._note("route planner: no walkable way found from here")
+            if self.path_kind == "partial" and self.limit < PLAN_CELLS * 4:
+                # Stuck at the end of a partial route (often pressed against a wall): look wider.
+                self.limit *= 2
+                self._note(f"route planner: searching a bigger area ({self.limit} points)")
+            if not self.path:
+                self.path_kind = ""
+            return
+        # A partial route that gets no closer than the last one: search a bigger area next time.
+        if pl.state == "partial":
+            if self.last_gap is not None and pl.best_gap >= self.last_gap - 100 and self.limit < PLAN_CELLS * 4:
+                self.limit *= 2
+                self._note(f"route planner: no closer, searching a bigger area ({self.limit} points)")
+                self.replan_at = 0.0
+            self.last_gap = pl.best_gap
+        else:
+            self.limit, self.last_gap = PLAN_CELLS, None
+        self.path, self.path_kind, self.path_cell = list(pl.path), pl.state, pl.cell
+        # distance left along the route from each point, for the progress check
+        self.tail = [0.0] * len(self.path)
+        for k in range(len(self.path) - 2, -1, -1):
+            self.tail[k] = self.tail[k + 1] + math.dist(self.path[k][:2], self.path[k + 1][:2])
+        self.watch = None
+        self._note(f"route planner: {'path to the target' if pl.state == 'done' else 'partial path toward the target'}, "
+                   f"{length:.0f} m, {pl.cells_searched} points searched, grid {pl.cell / 100:.1f} m")
+        if not self.announced:
+            self.announced = True
+            if pl.state == "done":
+                speech.say(f"Route found, {max(1, round(length))} metres", interrupt=False)
+            else:
+                speech.say("Heading toward it, searching for the way in", interrupt=False)
+
+    def _watch_progress(self, here: tuple, now: float) -> None:
+        """Re-plan if you keep moving but don't get any further along the route."""
+        i = min(range(len(self.path)), key=lambda k: math.dist(here[:2], self.path[k][:2]))
+        remaining = math.dist(here[:2], self.path[i][:2]) + self.tail[i]
+        if self.watch is None:
+            self.watch = (now, remaining)
+            return
+        t0, r0 = self.watch
+        if remaining < r0 - 150:
+            self.watch = (now, remaining)
+        elif now - t0 >= PROGRESS_SECONDS:
+            from .speech import speech
+
+            self.watch = (now, remaining)
+            self.replan_at = 0.0
+            self._note("route planner: no progress along the route, recalculating")
+            speech.say("Recalculating", interrupt=False)
+
     def route_direction(self) -> tuple | None:
         """Second point of the current planned path (where the route goes from here), if any."""
-        pl = self.planner
-        if pl is None or pl.state not in ("done", "partial") or len(pl.path) < 2:
+        if len(self.path) < 2:
             return None
-        return pl.path[1]
+        return self.path[1]
 
     # ------------------------------------------------------------ 1 and 2: the game's routes
     def _ask(self, pc: Any, eye: tuple, target_pos: tuple, target_actor: Any) -> tuple[Any, str]:
