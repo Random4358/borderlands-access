@@ -52,6 +52,10 @@ def _dist(a: tuple, b: tuple) -> float:
     return math.dist(a, b)
 
 
+class _NoPath(Exception):
+    """The navigation mesh answered, but found no path this time."""
+
+
 def _first(r: Any) -> Any:
     """Return value of a call that may also hand back out-parameters as a tuple."""
     return r[0] if isinstance(r, tuple) else r
@@ -97,8 +101,8 @@ class Route:
         if self.node is not None and _dist(eye, self.node) < NODE_REACHED:
             self.node, self.next_update = None, 0.0  # reached it: ask for the next one now
         if now >= self.next_update and (self.navmesh_ok is not False or self.nodes_ok is not False):
-            self.next_update = now + ROUTE_EVERY
             self.node, self.source = self._ask(pc, eye, target_pos, target_actor)
+            self.next_update = now + (ROUTE_EVERY if self.node is not None else 2.0)
         if self.node is not None and _dist(eye, self.node) <= _dist(eye, target_pos) + 200:
             return self.node
         if pawn is None:
@@ -134,10 +138,17 @@ class Route:
             toward = unrealsdk.find_class("NavMeshPath_Toward").ClassDefaultObject
             at = unrealsdk.find_class("NavMeshGoal_At").ClassDefaultObject
             handle.ClearConstraints()
+            try:
+                handle.SetFinalDestination(goal)
+            except Exception:
+                pass
             toward.TowardPoint(handle, goal)
-            at.AtLocation(handle, goal, 120.0)
+            try:
+                at.AtLocation(handle, goal, 150.0, True)   # keep a partial path if the goal isn't on the mesh
+            except Exception:
+                at.AtLocation(handle, goal, 150.0)
             if not _first(handle.FindPath()):
-                raise RuntimeError("FindPath found no path")
+                raise _NoPath("FindPath found no path")
             try:
                 handle.SetFinalDestination(goal)
             except Exception:
@@ -147,10 +158,14 @@ class Route:
             pos = (float(dest.X), float(dest.Y), float(dest.Z)) if ok and dest is not None else None
             if pos is None or _dist(eye, pos) < 40:
                 raise RuntimeError("no next move location")
+        except _NoPath as e:
+            # The mesh works but had no path from here; try again later (it may from elsewhere).
+            self._note(f"route finding: navigation mesh had no path ({e}); will keep trying")
+            return None
         except Exception as e:  # noqa: BLE001
             if self.navmesh_ok is None:
                 self.navmesh_ok = False
-                self._note(f"route finding: navigation mesh not usable ({e})")
+                self._note(f"route finding: navigation mesh not usable ({type(e).__name__}: {e})")
             return None
         if not self.navmesh_ok:
             self.navmesh_ok = True
@@ -223,6 +238,7 @@ class Route:
 
         direct = clear(point(heading, ahead))
         if direct is None:          # tracing not available: nothing better than straight
+            self._note("route finding: can't steer, line tests unavailable (see the line test lines)")
             return target_pos
         if direct:
             if now >= self.side_until:

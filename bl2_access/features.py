@@ -343,6 +343,11 @@ class Features:
             return
 
         objects.tick(self.s, snap, now)
+        # Until a line test has been seen to hit the floor, check again every 5 s (up to a minute).
+        if not game.FLOOR_SEEN and getattr(self, "trace_checks", 0) < 12 and now >= getattr(self, "next_trace_check", 0.0):
+            game.trace_self_test(snap.pawn)
+            self.trace_checks = getattr(self, "trace_checks", 0) + 1
+            self.next_trace_check = now + 5.0
 
         self.scan_enemies(snap)
         if self.s.radar and self.s.enemy_tones:
@@ -367,6 +372,9 @@ class Features:
             self.health_alert(snap, now)
 
     def on_spawn(self, snap: Snapshot) -> None:
+        game.trace_self_test(snap.pawn)
+        self.trace_checks = 1
+        self.next_trace_check = time.perf_counter() + 5.0
         name = game.map_name(snap.pc)
         if name and name != self.last_map:
             self.last_map = name

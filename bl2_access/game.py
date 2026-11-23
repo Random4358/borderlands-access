@@ -326,12 +326,81 @@ def display_name(obj: Any) -> str:
     return pretty(class_name(obj))
 
 
-def fast_trace(actor: Any, start: tuple[float, float, float], end: tuple[float, float, float]) -> bool | None:
-    """True if the line is clear of world geometry, None if tracing isn't available."""
+# Which line test works in this game: "fast" (Actor.FastTrace), "trace" (Actor.Trace), or None
+# until the first test. Chosen by trace_self_test() and by errors; logged once.
+TRACE_MODE: str | None = None
+_trace_notes: set[str] = set()
+
+
+def _trace_note(text: str) -> None:
+    if text in _trace_notes:
+        return
+    _trace_notes.add(text)
     try:
-        return bool(actor.FastTrace(vec(*end), vec(*start)))
+        from . import trace
+
+        trace.note(text)
     except Exception:
-        return None
+        pass
+
+
+def _fast(actor: Any, start: tuple, end: tuple) -> bool:
+    return bool(actor.FastTrace(vec(*end), vec(*start)))
+
+
+def _full(actor: Any, start: tuple, end: tuple) -> bool:
+    """Actor.Trace: returns the actor hit (the world itself counts), with the hit location and
+    normal as out-parameters. Clear = nothing hit."""
+    r = actor.Trace(vec(0, 0, 0), vec(0, 0, 0), vec(*end), vec(*start), False)
+    hit = r[0] if isinstance(r, tuple) else r
+    return hit is None
+
+
+def fast_trace(actor: Any, start: tuple[float, float, float], end: tuple[float, float, float]) -> bool | None:
+    """True if the line is clear of world geometry, False if something's in the way, None if no
+    way of tracing works. Uses whichever of the game's two trace functions works here."""
+    global TRACE_MODE
+    order = [TRACE_MODE] if TRACE_MODE in ("fast", "trace") else ["fast", "trace"]
+    if TRACE_MODE in ("fast", "trace"):
+        order.append("trace" if TRACE_MODE == "fast" else "fast")
+    for mode in order:
+        try:
+            result = _fast(actor, start, end) if mode == "fast" else _full(actor, start, end)
+        except Exception as e:  # noqa: BLE001
+            _trace_note(f"line test {mode} failed: {type(e).__name__}: {e}")
+            continue
+        if TRACE_MODE is None:
+            TRACE_MODE = mode
+        return result
+    return None
+
+
+FLOOR_SEEN = False  # a self-test has confirmed a method that sees the floor
+
+
+def trace_self_test(pawn: Any) -> str:
+    """Check the line test can see the floor under you (a straight-down trace must hit
+    something), and pick the method that can. If neither does (you might be in the air), the
+    current choice is kept and the caller tries again later. Returns the result for the log."""
+    global TRACE_MODE, FLOOR_SEEN
+    loc = location(pawn)
+    if loc is None:
+        return "no position"
+    start, end = loc, (loc[0], loc[1], loc[2] - 3000)
+    results = {}
+    for mode, fn in (("fast", _fast), ("trace", _full)):
+        try:
+            results[mode] = fn(pawn, start, end)
+        except Exception as e:  # noqa: BLE001
+            results[mode] = f"error {type(e).__name__}: {e}"
+    if results.get("fast") is False:
+        TRACE_MODE, FLOOR_SEEN = "fast", True
+    elif results.get("trace") is False:
+        TRACE_MODE, FLOOR_SEEN = "trace", True
+    verdict = TRACE_MODE if FLOOR_SEEN else "no floor seen yet, will check again"
+    _trace_note(f"line test self-check: FastTrace sees floor={results.get('fast') is False} ({results.get('fast')}), "
+                f"Trace sees floor={results.get('trace') is False} ({results.get('trace')}) -> {verdict}")
+    return verdict
 
 
 def line_of_sight(controller: Any, target: Any) -> bool:
