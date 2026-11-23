@@ -446,6 +446,21 @@ def feet_z(pawn: Any) -> float | None:
         return loc[2] - 90
 
 
+def ground_z(pawn: Any, x: float, y: float, top: float, depth: float = 400.0) -> float | None:
+    """Height of the ground at (x, y), searched downward from `top`, to within about 2 uu.
+    None if there's nothing within `depth` (or tracing doesn't work)."""
+    if fast_trace(pawn, (x, y, top), (x, y, top - depth)) is not False:
+        return None
+    lo, hi = top - depth, top
+    for _ in range(8):
+        mid = (lo + hi) / 2
+        if fast_trace(pawn, (x, y, hi), (x, y, mid)) is False:
+            lo = mid          # the surface is between mid and hi
+        else:
+            hi = mid
+    return (lo + hi) / 2
+
+
 def blockage(pawn: Any, angle: float, jump_height: float, reach: float = 120.0) -> dict:
     """What's in the way in direction `angle` (radians): a low obstacle you could jump, a wall,
     and whether the ways 60 degrees to each side are open. Uses line tests at knee, jump and

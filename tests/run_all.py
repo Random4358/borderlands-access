@@ -12,7 +12,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-SUITES = ["test_mod.py", "test_menu9.py"] + [f"test_round{i}.py" for i in range(3, 20)]
+SUITES = ["test_mod.py", "test_menu9.py"] + [f"test_round{i}.py" for i in range(3, 21)]
 
 failed = []
 for name in SUITES:

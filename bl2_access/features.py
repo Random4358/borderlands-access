@@ -898,7 +898,13 @@ class Features:
             nav_beacon.stop()
             speech.say(f"{poi.name} is gone. Beacon off")
             return
-        dist = nav_beacon.tick(self.s, snap, pos, poi.actor, f"{self.category}:{poi.name}", now)
+        # The route is keyed by where it goes, so switching between entries for the same place
+        # (a mission and its objective, say) doesn't throw the route away.
+        key = f"{poi.name} @ {pos[0] / 200:.0f},{pos[1] / 200:.0f},{pos[2] / 200:.0f}"
+        if key.split(" @ ")[1] == getattr(self, "beacon_place", ""):
+            key = getattr(self, "beacon_key", key)
+        self.beacon_place, self.beacon_key = key.split(" @ ")[1], key
+        dist = nav_beacon.tick(self.s, snap, pos, poi.actor, key, now)
         # Objective markers with no object at them are areas, so "arrived" a little earlier.
         arrive = 150 if poi.ptr is not None else 300
         if dist < arrive:

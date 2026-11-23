@@ -169,7 +169,12 @@ class Route:
         at_end = bool(path) and self.path_kind == "partial" and math.dist(here[:2], path[-1][:2]) < cell * 1.2
         grain_changed = bool(path) and (cell != self.path_cell)
         if pl.state != "running" and (not path or now >= self.replan_at or off_route or at_end or grain_changed):
-            pl.start(here, target_pos, cell=cell, max_cells=self.limit)
+            # Start from the ground actually under you (measured), not an estimate from your height.
+            ground = game.ground_z(pawn, loc[0], loc[1], loc[2])
+            start = (loc[0], loc[1], ground if ground is not None else feet)
+            self.start_note = (f"you at ({loc[0]:.0f}, {loc[1]:.0f}), body {loc[2]:.0f}, estimated feet {feet:.0f}, "
+                               f"measured ground {'none' if ground is None else f'{ground:.0f}'}")
+            pl.start(start, target_pos, cell=cell, max_cells=self.limit)
             self.replan_at = now + 8.0
         pl.step(PLAN_BUDGET)
         if pl.runs != self.runs_seen and pl.state in ("done", "partial", "failed"):
@@ -195,7 +200,9 @@ class Route:
 
         length = sum(math.dist(a[:2], b[:2]) for a, b in zip(pl.path, pl.path[1:])) / 100
         if pl.state == "failed":
-            self._note("route planner: no walkable way found from here")
+            r = pl.rejects
+            self._note(f"route planner: no walkable way found from here; steps refused: no floor {r['no floor']}, "
+                       f"knee {r['knee']}, chest {r['chest']}; grid {pl.cell / 100:.1f} m; {getattr(self, 'start_note', '')}")
             if self.path_kind == "partial" and self.limit < PLAN_CELLS * 4:
                 # Stuck at the end of a partial route (often pressed against a wall): look wider.
                 self.limit *= 2

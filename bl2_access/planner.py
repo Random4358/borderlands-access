@@ -45,6 +45,7 @@ class GridPlanner:
         self.max_cells = MAX_CELLS
         self.best_gap = 0.0       # how far the end of the path is from the target (uu)
         self.runs = 0             # increases each time a search finishes
+        self.rejects = {"no floor": 0, "knee": 0, "chest": 0}   # why steps were refused (for the log)
 
     # ------------------------------------------------------------ public
     def start(self, feet: Point, goal: Point, cell: float = CELL, max_cells: int | None = None) -> None:
@@ -56,6 +57,10 @@ class GridPlanner:
         self.cells_searched = 0
         self.cell = cell
         self.max_cells = max_cells or MAX_CELLS
+        # A bigger grid step crosses more ground, so it may rise or fall more (about 40 degrees).
+        self.up = max(STEP_UP, cell * 0.85)
+        self.down = max(DROP, cell * 0.95)
+        self.rejects = {"no floor": 0, "knee": 0, "chest": 0}
         self._job = self._search(feet, goal)
 
     def step(self, budget: int = 120) -> str:
@@ -77,17 +82,19 @@ class GridPlanner:
         return self.trace(a, b)
 
     def _floor(self, x: float, y: float, z: float) -> float | None:
-        """Floor height at (x, y), searching from a step above z to a short drop below it."""
-        if self._t((x, y, z + STEP_UP), (x, y, z - DROP)) is not False:
+        """Floor height at (x, y), searching from a step above z to a drop below it, to within
+        about 10 uu."""
+        up, down = getattr(self, "up", STEP_UP), getattr(self, "down", DROP)
+        if self._t((x, y, z + up), (x, y, z - down)) is not False:
             return None  # no floor in reach: a drop, a gap or a hole
-        if self._t((x, y, z + STEP_UP), (x, y, z)) is False:
-            lo, hi = z, z + STEP_UP          # floor is above where we stand
-        else:
-            lo, hi = z - DROP, z
-        mid = (lo + hi) / 2
-        if self._t((x, y, hi), (x, y, mid)) is False:
-            return (mid + hi) / 2
-        return (lo + mid) / 2
+        lo, hi = z - down, z + up
+        while hi - lo > 20:
+            mid = (lo + hi) / 2
+            if self._t((x, y, hi), (x, y, mid)) is False:
+                lo = mid
+            else:
+                hi = mid
+        return (lo + hi) / 2
 
     # ------------------------------------------------------------ the search (a generator: yields to share time)
     def _search(self, feet: Point, goal: Point) -> Iterator[None]:
@@ -137,12 +144,15 @@ class GridPlanner:
                 # nothing in the way at knee or chest height between the two floor heights.
                 nz = self._floor(nx, ny, cz)
                 if nz is None:
+                    self.rejects["no floor"] += 1
                     yield from self._pause()
                     continue
                 if self._t((cx, cy, cz + KNEE), (nx, ny, nz + KNEE)) is not True:
+                    self.rejects["knee"] += 1
                     yield from self._pause()
                     continue
                 if self._t((cx, cy, cz + CHEST), (nx, ny, nz + CHEST)) is not True:
+                    self.rejects["chest"] += 1
                     yield from self._pause()
                     continue
                 yield from self._pause()
