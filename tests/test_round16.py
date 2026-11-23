@@ -98,6 +98,7 @@ notes = []
 T.note = lambda text: notes.append(text)
 def reset():
     G.TRACE_MODE = None; G.FLOOR_SEEN = False; G._trace_notes.clear(); notes.clear()
+    G.TRACE_VIA = None; G.TRACE_VIA_NAME = "character"
 
 def world_hit(start, end):
     """A floor at z=-90 and a crate 2 m ahead (x 150..250, up to 60 cm high)."""
@@ -130,7 +131,7 @@ G.fast_trace(p, (0, 0, 0), (100, 0, 0)); assert G.TRACE_MODE == "fast"     # fir
 print("self-check:", G.trace_self_test(p)); assert G.TRACE_MODE == "trace" and G.FLOOR_SEEN
 assert G.fast_trace(p, (0, 0, -60), (300, 0, -60)) is False                    # now sees the crate
 # a working FastTrace is kept
-reset(); p = GoodFast(); assert G.trace_self_test(p) == "fast"
+reset(); p = GoodFast(); assert G.trace_self_test(p) == "fast via the character"
 # nothing works: None (callers fall back), no crash
 reset(); assert G.fast_trace(Nothing(), (0, 0, 0), (1, 0, 0)) is None
 # in the air at spawn: no floor under you yet -> keep going, check again later
