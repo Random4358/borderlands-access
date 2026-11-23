@@ -482,6 +482,25 @@ def blockage(pawn: Any, angle: float, jump_height: float, reach: float = 120.0) 
     }
 
 
+def openings(pawn: Any, reach: float = 250.0, step_deg: int = 30) -> list[float]:
+    """Directions (radians) all the way round you that are clear at knee and chest height for
+    `reach` and have floor, i.e. ways you could walk."""
+    loc = location(pawn)
+    feet = feet_z(pawn)
+    if loc is None or feet is None:
+        return []
+    x, y = loc[0], loc[1]
+    out = []
+    for k in range(0, 360, step_deg):
+        a = math.radians(k)
+        ex, ey = x + math.cos(a) * reach, y + math.sin(a) * reach
+        if (fast_trace(pawn, (x, y, feet + 45), (ex, ey, feet + 45)) is True
+                and fast_trace(pawn, (x, y, feet + 130), (ex, ey, feet + 130)) is True
+                and fast_trace(pawn, (ex, ey, feet + 30), (ex, ey, feet - 300)) is False):
+            out.append(a)
+    return out
+
+
 def line_of_sight(controller: Any, target: Any) -> bool:
     try:
         return bool(controller.LineOfSightTo(target))

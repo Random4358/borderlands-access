@@ -658,11 +658,22 @@ class Features:
         if not self.s.speak_blocked:
             return
         audio.play("nav", snd.wall_click(0.0, self.s.volume))
-        left, right = b["left_open"], b["right_open"]
-        where = ("open left and right" if left and right else "open to the left" if left
-                 else "open to the right" if right else "turn around")
         what = "Blocked" if b["knee_blocked"] else "Stuck"
-        speech.say(f"{what}, {where}", interrupt=False)
+        # Prefer the way the beacon's route goes, else the opening nearest where you're pushing.
+        prefer = angle
+        if self.beacon:
+            from .navigation import beacon as nav_beacon
+
+            step = nav_beacon.route.route_direction()
+            loc = game.location(snap.pawn)
+            if step is not None and loc is not None:
+                prefer = math.atan2(step[1] - loc[1], step[0] - loc[0])
+        openings = game.openings(snap.pawn)
+        if not openings:
+            speech.say(f"{what}. No way through nearby, turn around", interrupt=False)
+            return
+        best = min(openings, key=lambda a: abs(game.wrap_angle(a - prefer)))
+        speech.say(f"{what}. Way through at {game.clock(game.wrap_angle(best - snap.yaw))}", interrupt=False)
 
     def jump_cue(self, now: float, words: str) -> None:
         audio.play("alert", snd.ui("jump", self.s.volume))

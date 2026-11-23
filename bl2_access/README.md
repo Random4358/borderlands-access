@@ -78,10 +78,11 @@ name, how many points you have in it out of the maximum, and its description. F8
   turns brighter ("on course"): walk forward.
 - **Distance**: it pulses faster as you get closer, and says "Arrived" when you get there.
 - **Height**: the pitch is a little higher when the target is above you and lower when below.
-- **Route**: it leads you around walls and obstacles instead of straight through them. Where the level's navigation mesh
-  gives a walking route, it follows that one point at a time. Otherwise it steers by itself. When the straight line is
-  blocked, it tests the directions around you for one that's clear with floor under it, so it avoids drops, and leads you
-  that way, keeping to one side. If you keep walking but stop getting closer for 3 seconds, it tries the other side.
+- **Route**: it leads you around walls and obstacles, through doorways and gaps, and away from drops, instead of
+  straight at the target. Where the level's navigation mesh gives a walking route, it follows that. Otherwise the mod
+  plans its own: it searches the area around you, a metre at a time, testing with line traces where you can walk, and
+  finds the way through. It takes well under a second, and the search is spread over frames so the game doesn't
+  stutter. The beacon then leads you along that route. If you get snagged, it plans again from where you are.
 
 **Lock-on navigation** (off by default; Navigation options, or the accessibility settings) turns you to face the way to go
 when you hold the modifier and click the right stick, or press the apostrophe key. It turns toward the beacon's target if
@@ -90,8 +91,9 @@ level. It says, for example, "Facing Kill Boom, 30 metres". When lock-on navigat
 as before.
 
 **When you're blocked**: if you push into something and don't move, the mod says what's in the way. "Low obstacle.
-Jump over" means it's low enough to jump, and the jump cue plays. Otherwise you hear "Blocked" and which way is open: "open
-to the left", "open to the right", "open left and right", or "turn around". The beacon also picks a way around straight
+Jump over" means it's low enough to jump, and the jump cue plays. Otherwise you hear "Blocked" and where the way through is, as a
+clock direction, for example "Blocked. Way through at 10 o'clock". It looks all the way round you, and prefers the way the
+beacon's route goes. The beacon also picks a way around straight
 away. Turn the spoken part off with "Say when you're blocked" in the Navigation options.
 
 **Combat**: the enemy tones are designed for aiming, not just for knowing enemies are there.

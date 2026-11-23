@@ -10,7 +10,10 @@ walls. Three ways of finding it, best first:
   1. The level's navigation mesh, through the controller's NavigationHandle (what the game's
      own AI walks with).
   2. The older path-node network (Controller.FindPathToward / FindPathTo).
-  3. Local steering, which always works: when the straight line to the target is blocked, the
+  3. The mod's own route planner (planner.py): a search over a grid of points about a metre
+     apart, testing with line traces where you can walk, which finds the way round walls and
+     through doorways.
+  4. Local steering, used until the planner's first answer: when the straight line to the target is blocked, the
      directions around you are tested with line traces, and the beacon leads you along the
      first clear one with floor under it, keeping to one side so it doesn't flip back and
      forth. If you're walking but not getting closer, it tries the other side.
@@ -79,12 +82,16 @@ class Route:
         self.progress: tuple[float, float] | None = None  # (time, distance) at last check
         self.stuck_since: float | None = None
         self.forced_until = 0.0              # keep steering round a snag even if the line looks clear
+        self.planner = None                  # GridPlanner, made when first needed
+        self.replan_at = 0.0
+        self.plan_logged = ""
         self.noted: set[str] = set()
 
     def reset(self) -> None:
         self.node, self.source, self.next_update, self.target_key = None, "", 0.0, ""
         self.steer, self.next_steer, self.side, self.side_until, self.progress = None, 0.0, 0, 0.0, None
         self.stuck_since, self.forced_until = None, 0.0
+        self.planner, self.replan_at, self.plan_logged = None, 0.0, ""
 
     def _note(self, text: str) -> None:
         if text in self.noted:
@@ -101,6 +108,7 @@ class Route:
         if key != self.target_key:
             self.reset()
             self.target_key = key
+            self._note_target(key, eye, target_pos)
         if self.node is not None and _dist(eye, self.node) < NODE_REACHED:
             self.node, self.next_update = None, 0.0  # reached it: ask for the next one now
         if now >= self.next_update and (self.navmesh_ok is not False or self.nodes_ok is not False):
@@ -110,7 +118,64 @@ class Route:
             return self.node
         if pawn is None:
             return target_pos
-        return self._steer(pawn, eye, target_pos, now)
+        planned = self._planned(pawn, target_pos, now)
+        steer = self._steer(pawn, eye, target_pos, now)   # also watches for snags
+        if planned is not None and now >= self.forced_until:
+            return planned
+        return steer
+
+    def _note_target(self, key: str, eye: tuple, target_pos: tuple) -> None:
+        from . import trace
+
+        trace.note(f"route to '{key}': {_dist(eye, target_pos) / 100:.0f} m away, "
+                   f"target at ({target_pos[0]:.0f}, {target_pos[1]:.0f}, {target_pos[2]:.0f}), "
+                   f"you at ({eye[0]:.0f}, {eye[1]:.0f}, {eye[2]:.0f})")
+
+    def _planned(self, pawn: Any, target_pos: tuple, now: float) -> tuple | None:
+        """The next point on the route planner's path, planning or re-planning as needed."""
+        from .planner import CELL, GridPlanner, follow
+
+        loc = game.location(pawn)
+        feet = game.feet_z(pawn)
+        if loc is None or feet is None or game.TRACE_MODE not in ("fast", "trace"):
+            return None
+        here = (loc[0], loc[1], feet)
+        if self.planner is None:
+            self.planner = GridPlanner(lambda a, b: game.fast_trace(pawn, a, b))
+        pl = self.planner
+        off_route = bool(pl.path) and min(math.dist(here[:2], q[:2]) for q in pl.path) > CELL * 2.5
+        at_end = bool(pl.path) and math.dist(here[:2], pl.path[-1][:2]) < CELL and pl.state == "partial"
+        if pl.state == "idle" or (pl.state != "running" and (now >= self.replan_at or off_route or at_end)):
+            pl.start(here, target_pos)
+            self.replan_at = now + 4.0
+        pl.step(120)
+        if pl.state in ("done", "partial") and self.plan_logged != f"{pl.state}{len(pl.path)}":
+            self.plan_logged = f"{pl.state}{len(pl.path)}"
+            length = sum(math.dist(a[:2], b[:2]) for a, b in zip(pl.path, pl.path[1:])) / 100
+            self._note(f"route planner: {'path to the target' if pl.state == 'done' else 'partial path toward the target'}, "
+                       f"{length:.0f} m, {pl.cells_searched} points searched")
+        elif pl.state == "failed":
+            self._note("route planner: no walkable way found from here")
+        if pl.state not in ("done", "partial"):
+            return None
+
+        def visible(q: tuple) -> bool:
+            return all(game.fast_trace(pawn, (here[0], here[1], here[2] + h), (q[0], q[1], q[2] + h)) is not False
+                       for h in (50.0, 130.0))
+
+        nxt = follow(pl.path, here, visible)
+        if nxt is None:
+            return None
+        if pl.state == "done" and nxt == pl.path[-1]:
+            return target_pos
+        return (nxt[0], nxt[1], nxt[2] + 100)
+
+    def route_direction(self) -> tuple | None:
+        """Second point of the current planned path (where the route goes from here), if any."""
+        pl = self.planner
+        if pl is None or pl.state not in ("done", "partial") or len(pl.path) < 2:
+            return None
+        return pl.path[1]
 
     # ------------------------------------------------------------ 1 and 2: the game's routes
     def _ask(self, pc: Any, eye: tuple, target_pos: tuple, target_actor: Any) -> tuple[Any, str]:
@@ -216,6 +281,7 @@ class Route:
                 self.side_until = now + 3.0
                 self.forced_until = now + 2.5
                 self.steer, self.next_steer = None, 0.0
+                self.replan_at = 0.0          # and plan again from here
                 self._note("route finding: snagged on something, finding a way around")
         else:
             self.stuck_since = None

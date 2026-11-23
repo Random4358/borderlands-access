@@ -163,7 +163,7 @@ me.Acceleration = NS(X=800, Y=0, Z=0); push_for(0.9); assert len(said) == 2
 me.boxes = [wall]; me.Acceleration = NS(X=0, Y=0, Z=0); push_for(0.3)
 said.clear(); me.Acceleration = NS(X=800, Y=0, Z=0); push_for(0.9)
 print("wall:", said)
-assert said and said[-1][0] == "Blocked, open to the left", said
+assert said and said[-1][0] == "Blocked. Way through at 10 o'clock", said   # open to the left
 # walking normally (moving): nothing said
 me.boxes = []; me.Velocity = NS(X=400, Y=0, Z=0); said.clear(); push_for(0.9)
 assert not said, said
