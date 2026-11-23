@@ -1,0 +1,7 @@
+Optional. Speech normally goes through the 64-bit Prism helper in ..\helper (already set up).
+
+You can put 32-bit (x86) DLLs here as alternatives:
+  nvdaControllerClient32.dll   - NVDA's controller client, used if the Prism helper can't start
+  prism.dll                    - only if a 32-bit Prism build ever becomes available; it then loads inside the game
+
+Borderlands 2 is a 32-bit game, so 64-bit DLLs will not load from this folder.

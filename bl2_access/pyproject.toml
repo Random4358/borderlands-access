@@ -1,0 +1,5 @@
+[project]
+name = "Borderlands Access"
+version = "0.1.0"
+description = "Makes Borderlands 2 playable without sight: NVDA speech via Prism, enemy radar, targeting sounds, wall and ledge cues, points of interest, menu sounds and full controller combos."
+authors = [{ name = "Borderlands Access contributors" }]
