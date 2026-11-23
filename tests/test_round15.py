@@ -89,6 +89,7 @@ def call(cls, fn, obj, kind=Type.PRE, **args):
 
 
 # ================================================================ round 15: getting around obstacles
+import bl2_access.game as _G; _G.FLOOR_SEEN = True; _G.TRACE_MODE = "fast"   # line tests work in this simulated world
 import math
 from bl2_access import navigation as NAV
 from bl2_access import trace as T

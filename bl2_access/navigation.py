@@ -154,8 +154,8 @@ class Route:
 
         loc = game.location(pawn)
         feet = game.feet_z(pawn)
-        if loc is None or feet is None or game.TRACE_MODE not in ("fast", "trace"):
-            return None
+        if loc is None or feet is None or not game.FLOOR_SEEN:
+            return None   # no working line test yet: a plan from wrong answers would mislead you
         here = (loc[0], loc[1], feet)
         if self.planner is None:
             self.planner = GridPlanner(lambda a, b: game.fast_trace(pawn, a, b))
@@ -412,7 +412,7 @@ class Route:
         def floor(p: tuple) -> bool:
             return game.fast_trace(pawn, (p[0], p[1], p[2]), (p[0], p[1], p[2] - 300)) is False
 
-        direct = clear(point(heading, ahead))
+        direct = clear(point(heading, ahead)) if game.FLOOR_SEEN else None
         if direct is None:          # tracing not available: nothing better than straight
             self._note("route finding: can't steer, line tests unavailable (see the line test lines)")
             return target_pos

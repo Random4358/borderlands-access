@@ -197,10 +197,14 @@ chest.bIsUsable = True
 me.Location = NS(X=1850, Y=0, Z=0); m.state.last_device = "keyboard"; step()
 print("gun:", said[-1][0]); assert said[-1][0] == "Bandit SMG. Press E to pick up, hold E to equip", said[-1]
 # behind you, or out of sight: no prompt
-me.Location = NS(X=0, Y=-1850, Z=0); world.pc.Rotation = NS(Pitch=0, Yaw=16384, Roll=0)    # facing away from the door (it is toward -Y)
+me.Location = NS(X=0, Y=-1820, Z=0); world.pc.Rotation = NS(Pitch=0, Yaw=16384, Roll=0)    # facing away from the door (it is toward -Y)
 n = len(said); step(); assert len(said) == n
 world.pc.Rotation = NS(Pitch=0, Yaw=-16384, Roll=0); door.seen = False; step(); assert len(said) == n
 door.seen = True; step(); assert said[-1][0] == "Door Bunker. Press E to use", said[-1]
+# right next to it, the sight check failing (objects often block it with their own shape) doesn't stop the prompt
+me.Location = NS(X=0, Y=-1500, Z=0); step(); door.seen = False; me.Location = NS(X=0, Y=-1880, Z=0); step()
+assert said[-1][0] == "Door Bunker. Press E to use", said[-1]
+door.seen = True
 # key names follow the last device used
 m.state.last_device = "pad"; me.Location = NS(X=0, Y=0, Z=0); world.pc.Rotation = NS(Pitch=0, Yaw=0, Roll=0); step()
 assert said[-1][0].startswith("Chest Red. Press X"), said[-1]

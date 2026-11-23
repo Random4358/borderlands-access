@@ -481,7 +481,9 @@ class Features:
                     self.use_key = None  # walked away: it can be announced again
             if rel.dist > self.USE_RANGE or abs(math.degrees(rel.rel_yaw)) > self.USE_ANGLE:
                 continue
-            if not game.line_of_sight(snap.pc, actor):
+            # The game's sight check often fails against the object's own shape, so only use it
+            # to rule out things a little further off (likely the other side of a wall).
+            if rel.dist > 150 and not game.line_of_sight(snap.pc, actor):
                 continue
             if best is None or rel.dist < best[0]:
                 best = (rel.dist, key, verb, name)
@@ -611,7 +613,7 @@ class Features:
                 return
         else:
             self.stuck_since, self.stuck_told = None, False
-        if not (self.s.ledges or self.s.jump):
+        if not (self.s.ledges or self.s.jump) or not game.FLOOR_SEEN:
             return
         try:
             feet = snap.eye[2] - float(snap.pawn.BaseEyeHeight) - float(snap.pawn.CylinderComponent.CollisionHeight)
@@ -646,6 +648,8 @@ class Features:
 
     def announce_blocked(self, snap: Snapshot, angle: float) -> None:
         """You're pushing into something and not moving: say what it is and where it's open."""
+        if not game.FLOOR_SEEN:
+            return   # line tests aren't working here: anything we said would be a guess
         b = game.blockage(snap.pawn, angle, self.s.jump_height)
         if not b:
             return

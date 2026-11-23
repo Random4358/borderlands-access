@@ -56,6 +56,7 @@ def call(cls, fn, obj, kind=Type.PRE, **args):
 
 
 # ================================================================ round 4: missions + jump cues
+import bl2_access.game as _G; _G.FLOOR_SEEN = True; _G.TRACE_MODE = "fast"   # line tests work in this simulated world
 class Pawn:
     def __init__(s, name, loc, player=False, hostile=True):
         s.Name = name; s.Location = NS(X=loc[0], Y=loc[1], Z=loc[2])

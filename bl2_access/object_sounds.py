@@ -54,21 +54,8 @@ class Source:
 
 
 def _still_usable(obj: Any) -> bool:
-    """False for containers that have been opened, where the game says so."""
-    for getter in ("IsUsable", "CanBeUsed"):
-        try:
-            fn = getattr(obj, getter)
-        except Exception:
-            continue
-        try:
-            return bool(fn(None)) if callable(fn) else bool(fn)
-        except TypeError:
-            try:
-                return bool(fn())
-            except Exception:
-                continue
-        except Exception:
-            continue
+    """False for containers that have been opened, where the game says so plainly. (Calling the
+    game's usability functions without a player isn't reliable, so they aren't used.)"""
     for prop in ("bIsUsable", "bCanBeUsed", "bUsable"):
         try:
             return bool(getattr(obj, prop))
@@ -134,8 +121,11 @@ class ObjectSounds:
         if s.container_sounds or s.interactive_sounds or s.quest_item_sounds:
             for a in game.world_actors(["WillowInteractiveObject", "WillowVendingMachineBase"]):
                 consider(a, False)
-        # Quest items first, then nearest.
-        found.sort(key=lambda f: (f[3] != "quest", f[0]))
+        # Quest items first, then nearest. A sound already playing gets a 3 m head start, so two
+        # things at about the same distance don't keep swapping (which made the sound seem to
+        # jump between objects).
+        playing = set(self.sources)
+        found.sort(key=lambda f: (f[3] != "quest", f[0] - (300.0 if f[1] in playing else 0.0)))
         return found[: max(1, min(int(s.object_max), snd.STREAMS))]
 
     # ------------------------------------------------------------ per frame

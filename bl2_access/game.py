@@ -381,114 +381,114 @@ def _outside_body(start: tuple, end: tuple) -> tuple[tuple, tuple]:
     return (start[0] + BODY_CLEAR, start[1], start[2]), (end[0] + BODY_CLEAR, end[1], end[2])
 
 
+# Ways of asking the game whether a line is clear. Which works depends on how the SDK passes
+# arguments to these engine functions, so the self-check tries them all and keeps one that
+# gives sensible answers (floor below you blocked, open air clear). Each returns True = clear.
+def _hit_of(r: Any) -> Any:
+    return r[0] if isinstance(r, tuple) else r
+
+
+TRACE_METHODS: dict[str, Any] = {
+    "FastTrace(end, start)": lambda c, a, b: bool(c.FastTrace(vec(*b), vec(*a))),
+    "FastTrace(TraceEnd=, TraceStart=)": lambda c, a, b: bool(c.FastTrace(TraceEnd=vec(*b), TraceStart=vec(*a))),
+    "FastTrace(end, start, extent, complex)": lambda c, a, b: bool(c.FastTrace(vec(*b), vec(*a), vec(0, 0, 0), False)),
+    "Trace(TraceEnd=, TraceStart=)": lambda c, a, b: _hit_of(c.Trace(TraceEnd=vec(*b), TraceStart=vec(*a), bTraceActors=False)) is None,
+    "Trace(end, start)": lambda c, a, b: _hit_of(c.Trace(vec(*b), vec(*a), False)) is None,
+    "Trace(outs, end, start)": lambda c, a, b: _hit_of(c.Trace(vec(0, 0, 0), vec(0, 0, 0), vec(*b), vec(*a), False)) is None,
+}
+TRACE_METHOD = "FastTrace(end, start)"
+
+
 def _fast(actor: Any, start: tuple, end: tuple) -> bool:
     if BODY_PTR is not None:
         start, end = _outside_body(start, end)
-    return bool(_caller(actor).FastTrace(vec(*end), vec(*start)))
+    return TRACE_METHODS[TRACE_METHOD](_caller(actor), start, end)
 
 
 def _full(actor: Any, start: tuple, end: tuple) -> bool:
-    """Actor.Trace: returns the actor hit (the world itself counts), with the hit location and
-    normal as out-parameters. Clear = nothing hit."""
-    r = _caller(actor).Trace(vec(0, 0, 0), vec(0, 0, 0), vec(*end), vec(*start), False)
-    hit = r[0] if isinstance(r, tuple) else r
-    return hit is None
+    return TRACE_METHODS["Trace(outs, end, start)"](_caller(actor), start, end)
 
 
 def fast_trace(actor: Any, start: tuple[float, float, float], end: tuple[float, float, float]) -> bool | None:
     """True if the line is clear of world geometry, False if something's in the way, None if no
-    way of tracing works. Uses whichever of the game's two trace functions works here."""
-    global TRACE_MODE
-    order = [TRACE_MODE] if TRACE_MODE in ("fast", "trace") else ["fast", "trace"]
-    if TRACE_MODE in ("fast", "trace"):
-        order.append("trace" if TRACE_MODE == "fast" else "fast")
-    for mode in order:
-        try:
-            result = _fast(actor, start, end) if mode == "fast" else _full(actor, start, end)
-        except Exception as e:  # noqa: BLE001
-            _trace_note(f"line test {mode} failed: {type(e).__name__}: {e}")
-            continue
-        if TRACE_MODE is None:
-            TRACE_MODE = mode
-        return result
-    return None
-
-
-FLOOR_SEEN = False  # a self-test has confirmed a method that sees the floor
-
-
-def _pick_tracer(pawn: Any, loc: tuple) -> str:
-    """Choose which object runs line tests: the first that can see the floor below you and
-    isn't blocked in every direction straight out from your centre (which would mean it's
-    hitting your own body). If every one is, lines are started just outside your body."""
-    global TRACE_VIA, TRACE_VIA_NAME, BODY_PTR
-    BODY_PTR = None
-    candidates = [("character", pawn)]
+    way of tracing works. Uses the method and object the self-check chose."""
+    global TRACE_MODE, TRACE_METHOD
     try:
-        candidates.append(("controller", pawn.Controller))
-    except Exception:
-        pass
-    try:
-        candidates.append(("world", pawn.WorldInfo))
-    except Exception:
-        pass
-    report = []
-    chosen = None
-    for name, obj in candidates:
-        if obj is None:
-            continue
-        try:
-            floor = not bool(obj.FastTrace(vec(loc[0], loc[1], loc[2] - 3000), vec(*loc)))
-            out = [bool(obj.FastTrace(vec(loc[0] + dx * 80, loc[1] + dy * 80, loc[2]), vec(*loc)))
-                   for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (0.7, 0.7), (-0.7, -0.7), (0.7, -0.7), (-0.7, 0.7))]
-        except Exception as e:  # noqa: BLE001
-            report.append(f"{name}: error {type(e).__name__}")
-            continue
-        open_dirs = sum(out)
-        report.append(f"{name}: floor {'seen' if floor else 'not seen'}, {open_dirs} of 8 directions clear")
-        if chosen is None and floor and open_dirs > 0:
-            chosen = (name, obj)
-    if chosen is None:
-        TRACE_VIA, TRACE_VIA_NAME = None, "character"
-        BODY_PTR = weak(pawn)
-        # Check that starting outside the body helps; if not, you're probably just boxed in.
-        try:
-            ok = sum(_fast(pawn, loc, (loc[0] + dx * 120, loc[1] + dy * 120, loc[2]))
-                     for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
-        except Exception:
-            ok = 0
-        verdict = (f"none clear from your centre; starting lines just outside your body ({ok} of 4 directions clear then)")
-    else:
-        TRACE_VIA_NAME = chosen[0]
-        TRACE_VIA = None if chosen[0] == "character" else weak(chosen[1])
-        verdict = f"using the {chosen[0]}"
-    _trace_note(f"line test tracer: {'; '.join(report)} -> {verdict}")
-    return TRACE_VIA_NAME
+        result = _fast(actor, start, end)
+    except Exception as e:  # noqa: BLE001
+        _trace_note(f"line test {TRACE_METHOD} failed: {type(e).__name__}: {e}")
+        # Until the self-check has chosen, try the other ways of asking.
+        for name in TRACE_METHODS:
+            if name == TRACE_METHOD:
+                continue
+            try:
+                result = TRACE_METHODS[name](_caller(actor), start, end)
+            except Exception:
+                continue
+            TRACE_METHOD = name
+            break
+        else:
+            return None
+    if TRACE_MODE is None:
+        TRACE_MODE = "fast"
+    return result
+
+
+FLOOR_SEEN = False  # a self-check has found a method that gives sensible answers
 
 
 def trace_self_test(pawn: Any) -> str:
-    """Check the line test can see the floor under you (a straight-down trace must hit
-    something), and pick the method that can. If neither does (you might be in the air), the
-    current choice is kept and the caller tries again later. Returns the result for the log."""
-    global TRACE_MODE, FLOOR_SEEN
+    """Try every way of tracing (each method, run by your character, your controller or the
+    level's WorldInfo) and keep the first that gives sensible answers here: the floor below you
+    blocked, and open air above you or in some direction around you clear. Everything is
+    logged. If none does (you might be in the air or boxed in), the caller tries again later."""
+    global TRACE_MODE, FLOOR_SEEN, TRACE_METHOD, TRACE_VIA, TRACE_VIA_NAME, BODY_PTR
     loc = location(pawn)
     if loc is None:
         return "no position"
-    _pick_tracer(pawn, loc)
-    start, end = loc, (loc[0], loc[1], loc[2] - 3000)
-    results = {}
-    for mode, fn in (("fast", _fast), ("trace", _full)):
+    try:
+        v = vec(1.5, 2.5, 3.5)
+        _trace_note(f"line test: vectors arrive as ({v.X}, {v.Y}, {v.Z})")
+    except Exception as e:  # noqa: BLE001
+        _trace_note(f"line test: can't make vectors: {e}")
+    callers = [("character", pawn)]
+    for name, getter in (("controller", lambda: pawn.Controller), ("world", lambda: pawn.WorldInfo)):
         try:
-            results[mode] = fn(pawn, start, end)
-        except Exception as e:  # noqa: BLE001
-            results[mode] = f"error {type(e).__name__}: {e}"
-    if results.get("fast") is False:
-        TRACE_MODE, FLOOR_SEEN = "fast", True
-    elif results.get("trace") is False:
-        TRACE_MODE, FLOOR_SEEN = "trace", True
-    verdict = (f"{TRACE_MODE} via the {TRACE_VIA_NAME}" if FLOOR_SEEN else "no floor seen yet, will check again")
-    _trace_note(f"line test self-check: FastTrace sees floor={results.get('fast') is False} ({results.get('fast')}), "
-                f"Trace sees floor={results.get('trace') is False} ({results.get('trace')}) -> {verdict}")
+            obj = getter()
+            if obj is not None:
+                callers.append((name, obj))
+        except Exception:
+            pass
+    dirs = [(math.cos(math.radians(k)), math.sin(math.radians(k))) for k in range(0, 360, 45)]
+    report, best = [], None
+    BODY_PTR = None
+    for cname, obj in callers:
+        for mname, fn in TRACE_METHODS.items():
+            try:
+                floor = fn(obj, loc, (loc[0], loc[1], loc[2] - 3000))
+                sky = fn(obj, loc, (loc[0], loc[1], loc[2] + 4000))
+                around = sum(bool(fn(obj, loc, (loc[0] + dx * 1500, loc[1] + dy * 1500, loc[2]))) for dx, dy in dirs)
+            except Exception as e:  # noqa: BLE001
+                report.append(f"{cname} {mname}: error {type(e).__name__}")
+                continue
+            ok = floor is False and (sky is True or around > 0)
+            report.append(f"{cname} {mname}: floor {'blocked' if floor is False else 'clear'}, "
+                          f"sky {'clear' if sky else 'blocked'}, {around}/8 around clear{' OK' if ok else ''}")
+            score = (sky is True) + around
+            if ok and (best is None or score > best[0]):
+                best = (score, cname, obj, mname)
+    for line in report:
+        _trace_note("line test candidate: " + line)
+    if best is None:
+        verdict = "no method gave sensible answers here; will check again"
+        _trace_note(f"line test self-check: {verdict}")
+        return verdict
+    _score, cname, obj, mname = best
+    TRACE_METHOD, TRACE_MODE, FLOOR_SEEN = mname, "fast", True
+    TRACE_VIA_NAME = cname
+    TRACE_VIA = None if cname == "character" else weak(obj)
+    verdict = f"{mname} via the {cname}"
+    _trace_note(f"line test self-check: using {verdict}")
     return verdict
 
 

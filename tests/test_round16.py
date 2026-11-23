@@ -98,7 +98,7 @@ notes = []
 T.note = lambda text: notes.append(text)
 def reset():
     G.TRACE_MODE = None; G.FLOOR_SEEN = False; G._trace_notes.clear(); notes.clear()
-    G.TRACE_VIA = None; G.TRACE_VIA_NAME = "character"
+    G.TRACE_VIA = None; G.TRACE_VIA_NAME = "character"; G.TRACE_METHOD = "FastTrace(end, start)"
 
 def world_hit(start, end):
     """A floor at z=-90 and a crate 2 m ahead (x 150..250, up to 60 cm high)."""
@@ -122,16 +122,16 @@ class Nothing:
 
 # FastTrace errors -> Trace used, and the error is logged
 reset(); p = BrokenFast()
-assert G.fast_trace(p, (0, 0, 0), (0, 0, -500)) is False and G.TRACE_MODE == "trace"
+assert G.fast_trace(p, (0, 0, 0), (0, 0, -500)) is False and G.TRACE_METHOD.startswith("Trace")
 assert G.fast_trace(p, (0, 0, 0), (100, 0, 0)) is True
-assert any("line test fast failed: TypeError" in n for n in notes)
+assert any("failed: TypeError" in n for n in notes)
 # FastTrace blind -> the self-check notices it can't see the floor and switches to Trace
 reset(); p = BlindFast()
 G.fast_trace(p, (0, 0, 0), (100, 0, 0)); assert G.TRACE_MODE == "fast"     # first guess
-print("self-check:", G.trace_self_test(p)); assert G.TRACE_MODE == "trace" and G.FLOOR_SEEN
+print("self-check:", G.trace_self_test(p)); assert G.TRACE_METHOD.startswith("Trace") and G.FLOOR_SEEN
 assert G.fast_trace(p, (0, 0, -60), (300, 0, -60)) is False                    # now sees the crate
 # a working FastTrace is kept
-reset(); p = GoodFast(); assert G.trace_self_test(p) == "fast via the character"
+reset(); p = GoodFast(); assert G.trace_self_test(p) == "FastTrace(end, start) via the character"
 # nothing works: None (callers fall back), no crash
 reset(); assert G.fast_trace(Nothing(), (0, 0, 0), (1, 0, 0)) is None
 # in the air at spawn: no floor under you yet -> keep going, check again later
@@ -164,7 +164,7 @@ f = m.feats; f.had_pawn = False; f.last_map = ""
 def tick():
     m.hooks._last_tick = 0; m.hooks.on_tick(None, None, None, None)
 said.clear(); played.clear(); tick()          # spawn: self-check picks Trace
-assert G.TRACE_MODE == "trace", (G.TRACE_MODE, notes)
+assert G.TRACE_METHOD.startswith("Trace"), (G.TRACE_METHOD, notes)
 f.next_wall = 0; f.next_jump_ok = 0; tick()
 print("jump:", played, [s for s, _ in said][-2:])
 assert "alert" in played and said[-1][0] == "Jump over", (played, said)

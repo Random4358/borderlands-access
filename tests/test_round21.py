@@ -98,7 +98,7 @@ notes = []
 T.note = lambda text: notes.append(text)
 def reset():
     G.TRACE_MODE = None; G.FLOOR_SEEN = False; G._trace_notes.clear(); notes.clear()
-    G.TRACE_VIA = None; G.TRACE_VIA_NAME = "character"
+    G.TRACE_VIA = None; G.TRACE_VIA_NAME = "character"; G.TRACE_METHOD = "FastTrace(end, start)"
 FLOOR = -90.0
 walls = [(1000, 1020, -400, 150, 2000), (1000, 1020, 280, 400, 2000),
          (1000, 1600, -420, -400, 2000), (1000, 1600, 400, 420, 2000), (1580, 1600, -420, 420, 2000)]
@@ -141,9 +141,12 @@ assert G.openings(me) == []                                           # every wa
 # --- the self-check notices and switches to the world object
 reset(); print("self-check:", G.trace_self_test(me))
 assert G.TRACE_VIA_NAME == "world", notes
-tracer = [n for n in notes if n.startswith("line test tracer")][0]
-print(tracer)
-assert "character: floor seen, 0 of 8 directions clear" in tracer and "world: floor seen, 8 of 8" in tracer
+cands = [n for n in notes if n.startswith("line test candidate")]
+for c in cands:
+    if "error" not in c:
+        print(c)
+assert any(c.startswith("line test candidate: character FastTrace(end, start): floor blocked, sky blocked, 0/8") for c in cands)
+assert any(c.startswith("line test candidate: world FastTrace(end, start): floor blocked, sky clear") and c.endswith("OK") for c in cands)
 assert abs(G.ground_z(me, 0, 0, me.Location.Z) - FLOOR) < 3          # real ground now
 assert len(G.openings(me)) == 12                                      # open all round
 print("tracer choice OK")
@@ -168,23 +171,14 @@ assert b["jumpable"], b
 print("jump check OK")
 print("ALL ROUND 21 TESTS OK")
 
-# --- last resort: every object's trace hits your body -> lines start just outside it
+# --- nothing sensible anywhere (as in the game so far): it says so and checks again later
 reset()
-class BodyWorld(World):
-    def __init__(s, pawn): s.pawn = pawn
-    def FastTrace(s, end, start):
-        if s.pawn.in_body(start.X, start.Y, start.Z):
-            return False
-        return World.FastTrace(s, end, start)
-me = Pawn((0.0, 0.0)); me.WorldInfo = BodyWorld(me)
+class Stuck(Pawn):
+    def FastTrace(s, end, start): return False
+class StuckWorld:
+    def FastTrace(s, end, start): return False
+me = Stuck((0.0, 0.0)); me.WorldInfo = StuckWorld()
 print("self-check:", G.trace_self_test(me))
-tracer = [n for n in notes if n.startswith("line test tracer")][0]
-print(tracer)
-assert "starting lines just outside your body (4 of 4" in tracer, tracer
-assert abs(G.ground_z(me, 0, 0, me.Location.Z) - FLOOR) < 3
-assert len(G.openings(me)) == 12
-me.Location = NS(X=250.0, Y=-1900.0, Z=FLOOR + 90)
-assert G.blockage(me, 0.0, 100)["jumpable"]
-G.BODY_PTR = None
-print("starting outside the body OK")
-print("ALL ROUND 21 TESTS OK (with fallback)")
+assert not G.FLOOR_SEEN and any("no method gave sensible answers" in n for n in notes)
+print("reports when nothing works OK")
+print("ALL ROUND 21 TESTS OK")
