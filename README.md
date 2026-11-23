@@ -2,7 +2,7 @@
 
 A mod that makes Borderlands 2 playable without sight. It reads the game's menus aloud through your screen reader (NVDA,
 via Prism), and adds directional sounds for enemies, aiming, loot, containers, interactive objects, quest items, walls,
-ledges and jumps. It also has a guidance beacon, interaction prompts, lock-on aiming, navigation assist and full
+ledges and jumps. It also has a guidance beacon, interaction prompts, lock-on aiming, lock-on navigation and full
 controller support.
 
 ## Install

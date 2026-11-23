@@ -88,7 +88,7 @@ def call(cls, fn, obj, kind=Type.PRE, **args):
 
 
 
-# ================================================================ round 14: steady beacon, route finding, navigation assist
+# ================================================================ round 14: steady beacon, route finding, lock-on navigation
 import math
 from array import array
 from bl2_access import audio as A
@@ -203,12 +203,12 @@ assert NAV.beacon.route.supported is False and abs(NAV.beacon.last[2]) < 0.1
 f.beacon = False; tick()
 print("route finding OK")
 
-# --- navigation assist: one press turns you toward the way to go
+# --- lock-on navigation: one press turns you toward the way to go
 world.pc.Rotation = NS(Pitch=3000, Yaw=16384, Roll=0)
-m.opt_nav_assist.value = False; tick(); said.clear()
-f.face_objective(); assert said[-1][0].startswith("Navigation assist is off"), said
+m.opt_lock_nav.value = False; tick(); said.clear()
+f.face_objective(); assert said[-1][0].startswith("Lock-on navigation is off"), said
 assert world.pc.Rotation.Yaw == 16384
-m.opt_nav_assist.value = True; tick()
+m.opt_lock_nav.value = True; tick()
 f.face_objective()
 y = ((world.pc.Rotation.Yaw + 32768) % 65536 - 32768) * 360 / 65536
 assert abs(y) < 1 and world.pc.Rotation.Pitch == 0, world.pc.Rotation   # facing the chest, view level
@@ -236,7 +236,7 @@ f.face_objective(); assert said[-1][0].startswith("No objective marked")
 # buttons: modifier + right stick click, and the apostrophe key
 assert m.controls.COMBOS["XboxTypeS_RightThumbStick"] == "stick_r"
 assert any(b.key == "Quote" for b in m.KEYBINDS)
-m.opt_nav_assist.value = False; tick(); m.controls.ACTIONS["stick_r"][1](); assert said[-1][0].startswith("Heading")
+m.opt_lock_nav.value = False; tick(); m.controls.ACTIONS["stick_r"][1](); assert said[-1][0].startswith("Heading")
 # glossary has both beacon sounds, each with a preview
 assert {"beacon", "beacon_on"} <= {k for k, _n, _d in A.SOUNDS} and A.preview("beacon") and A.preview("beacon_on")
 m.on_disable()

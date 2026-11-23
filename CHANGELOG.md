@@ -18,7 +18,7 @@ First release.
 - **Navigation**:
   - A scanner with categories, including quest objectives with map markers.
   - A steady beacon with an "on course" tone, which follows the game's walking route where the level has one.
-  - Navigation assist, which turns you to face the objective.
+  - Lock-on navigation, which turns you to face the objective.
   - Interaction prompts that name the button to press.
 - **Settings**: a spoken accessibility settings menu (press the modifier three times) and a sound glossary with a 0–300%
   volume for every sound.

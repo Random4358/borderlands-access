@@ -73,7 +73,7 @@ example "Damage 11, Accuracy 89.3"), special effects, value, and any level requi
 with the one you have equipped, each stat says "better", "worse" or "same". An empty equipped slot says "Empty slot". In the **skill tree** it reads the skill's
 name, how many points you have in it out of the maximum, and its description. F8 or Back + B repeats the last one.
 
-**Beacon and navigation assist**: the beacon (Back + left trigger, or F11, on a scanner entry) is a steady tone:
+**Beacon and lock-on navigation**: the beacon (Back + left trigger, or F11, on a scanner entry) is a steady tone:
 - **Direction**: panned the way to go, and muffled when that's behind you. Within about 7 degrees of the right way it
   turns brighter ("on course"): walk forward.
 - **Distance**: it pulses faster as you get closer, and says "Arrived" when you get there.
@@ -81,10 +81,10 @@ name, how many points you have in it out of the maximum, and its description. F8
 - **Route**: where the level has a navigation network, it follows the game's own walking route one point at a time
   instead of pointing straight through walls. Otherwise it points straight at the target.
 
-**Navigation assist** (off by default; Navigation options, or the accessibility settings) turns you to face the way to go
+**Lock-on navigation** (off by default; Navigation options, or the accessibility settings) turns you to face the way to go
 when you hold the modifier and click the right stick, or press the apostrophe key. It turns toward the beacon's target if
 you've picked one, otherwise the nearest marker of your tracked mission, along the route when there is one, with your view
-level. It says, for example, "Facing Kill Boom, 30 metres". When navigation assist is off, that button says your heading
+level. It says, for example, "Facing Kill Boom, 30 metres". When lock-on navigation is off, that button says your heading
 as before.
 
 **Combat**: the enemy tones are designed for aiming, not just for knowing enemies are there.

@@ -1,4 +1,4 @@
-"""Guidance to a chosen place: the beacon, route finding, and the navigation assist turn.
+"""Guidance to a chosen place: the beacon, route finding, and the lock-on navigation turn.
 
 Beacon: a steady tone (not separate pings) on its own stream, so its direction is always
 current. It's panned to where you need to go, muffled when that's behind you, and switches to
@@ -10,7 +10,7 @@ Route: where the level has a navigation network, the game's own path finding
 leads to that point instead of straight through walls, moving on as you reach each one. Where
 the game gives no route, the beacon points straight at the target.
 
-Navigation assist (an option): Modifier + right stick click, or the apostrophe key, turns you to
+Lock-on navigation (an option): Modifier + right stick click, or the apostrophe key, turns you to
 face the way to go, along the route when there is one.
 """
 

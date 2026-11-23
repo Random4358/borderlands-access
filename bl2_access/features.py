@@ -38,7 +38,7 @@ class Settings:
     npc_max: int = 2
     npc_talk: bool = True
     interact_prompts: bool = True    # "Chest. Press X to open" when you can use something
-    nav_assist: bool = False         # Modifier + right stick click turns you toward the objective
+    lock_nav: bool = False         # Modifier + right stick click turns you toward the objective
     jump: bool = True
     jump_height: float = 100.0   # unreal units the player clears with a jump
     speak_jump: bool = False
@@ -869,11 +869,11 @@ class Features:
         return w.label, (game.location(game.deref(w.ptr)) if w.ptr is not None else None) or w.pos, game.deref(w.ptr)
 
     def face_objective(self) -> None:
-        """Navigation assist: turn to face the way to the objective (or the beacon's target)."""
+        """Lock-on navigation: turn to face the way to the objective (or the beacon's target)."""
         from . import navigation
 
-        if not self.s.nav_assist:
-            speech.say("Navigation assist is off. Turn it on in the accessibility settings, Navigation group")
+        if not self.s.lock_nav:
+            speech.say("Lock-on navigation is off. Turn it on in the accessibility settings, Navigation group")
             return
         snap = self.snapshot()
         if snap is None:
