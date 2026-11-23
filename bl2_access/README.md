@@ -89,6 +89,11 @@ you've picked one, otherwise the nearest marker of your tracked mission, along t
 level. It says, for example, "Facing Kill Boom, 30 metres". When lock-on navigation is off, that button says your heading
 as before.
 
+**When you're blocked**: if you push into something and don't move, the mod says what's in the way. "Low obstacle.
+Jump over" means it's low enough to jump, and the jump cue plays. Otherwise you hear "Blocked" and which way is open: "open
+to the left", "open to the right", "open left and right", or "turn around". The beacon also picks a way around straight
+away. Turn the spoken part off with "Say when you're blocked" in the Navigation options.
+
 **Combat**: the enemy tones are designed for aiming, not just for knowing enemies are there.
 - **Left or right**: the tone is panned by where the enemy is compared with your crosshair. Turn toward it until it's
   centred.

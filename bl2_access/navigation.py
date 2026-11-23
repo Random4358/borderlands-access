@@ -77,11 +77,14 @@ class Route:
         self.side = 0                        # +1 right, -1 left, 0 not chosen
         self.side_until = 0.0
         self.progress: tuple[float, float] | None = None  # (time, distance) at last check
+        self.stuck_since: float | None = None
+        self.forced_until = 0.0              # keep steering round a snag even if the line looks clear
         self.noted: set[str] = set()
 
     def reset(self) -> None:
         self.node, self.source, self.next_update, self.target_key = None, "", 0.0, ""
         self.steer, self.next_steer, self.side, self.side_until, self.progress = None, 0.0, 0, 0.0, None
+        self.stuck_since, self.forced_until = None, 0.0
 
     def _note(self, text: str) -> None:
         if text in self.noted:
@@ -201,13 +204,22 @@ class Route:
         base = game.location(pawn) or eye  # trace at body height: below head-high clutter
         start = (base[0], base[1], base[2] + 20)
         dist = math.hypot(target_pos[0] - start[0], target_pos[1] - start[1])
-        # Not getting closer while walking: try the other side.
-        moving = False
-        try:
-            v = pawn.Velocity
-            moving = math.hypot(v.X, v.Y) > 50
-        except Exception:
-            pass
+        # Pushing but not moving = snagged on something (often too low for the body-height line
+        # test to see): pick a way around straight away; if that doesn't work, the other side.
+        trying = game.move_intent(pawn) is not None
+        if trying and game.speed(pawn) < 40:
+            if self.stuck_since is None:
+                self.stuck_since = now
+            elif now - self.stuck_since >= 0.8:
+                self.stuck_since = now + 1.2   # next re-plan after 2 s more of being stuck
+                self.side = -self.side if self.side else self._open_side(pawn, start, target_pos)
+                self.side_until = now + 3.0
+                self.forced_until = now + 2.5
+                self.steer, self.next_steer = None, 0.0
+                self._note("route finding: snagged on something, finding a way around")
+        else:
+            self.stuck_since = None
+        moving = trying or game.speed(pawn) > 50
         if self.progress is None or not moving:
             self.progress = (now, dist)
         elif now - self.progress[0] >= STUCK_SECONDS:
@@ -223,6 +235,16 @@ class Route:
         self.steer = self._choose(pawn, start, target_pos, dist, now)
         return self.steer
 
+    def _open_side(self, pawn: Any, start: tuple, target_pos: tuple) -> int:
+        """Which side (+1 right, -1 left) is open when you're snagged, toward the target."""
+        heading = math.atan2(target_pos[1] - start[1], target_pos[0] - start[0])
+        b = game.blockage(pawn, heading, 100.0)
+        if b.get("right_open") and not b.get("left_open"):
+            return 1
+        if b.get("left_open") and not b.get("right_open"):
+            return -1
+        return 1
+
     def _choose(self, pawn: Any, start: tuple, target_pos: tuple, dist: float, now: float) -> tuple:
         ahead = min(LOOK_AHEAD, max(dist, 1.0))
         heading = math.atan2(target_pos[1] - start[1], target_pos[0] - start[0])
@@ -233,6 +255,13 @@ class Route:
         def clear(p: tuple) -> bool | None:
             return game.fast_trace(pawn, start, p)
 
+        feet = game.feet_z(pawn)
+        knee_z = (feet + 45) if feet is not None else start[2] - 60
+
+        def clear_low(p: tuple) -> bool:
+            """Also clear at knee height, so low obstacles don't count as a way through."""
+            return game.fast_trace(pawn, (start[0], start[1], knee_z), (p[0], p[1], knee_z)) is not False
+
         def floor(p: tuple) -> bool:
             return game.fast_trace(pawn, (p[0], p[1], p[2]), (p[0], p[1], p[2] - 300)) is False
 
@@ -240,22 +269,23 @@ class Route:
         if direct is None:          # tracing not available: nothing better than straight
             self._note("route finding: can't steer, line tests unavailable (see the line test lines)")
             return target_pos
-        if direct:
+        if direct and now >= self.forced_until:
             if now >= self.side_until:
                 self.side = 0
             return target_pos
         sides = [self.side] if self.side else [1, -1]
         if self.side:
             sides.append(-self.side)
-        for off in STEER_ANGLES:
-            for s in sides:
-                p = point(heading + s * math.radians(off), STEER_REACH)
-                if clear(p) and floor(p):
-                    if s != self.side:
-                        self.side = s
-                        self.side_until = now + 2.0
-                    self._note("route finding: steering around obstacles (no game route here)")
-                    return p
+        for need_low in (True, False):   # prefer ways clear at knee height too
+            for off in STEER_ANGLES:
+                for s in sides:
+                    p = point(heading + s * math.radians(off), STEER_REACH)
+                    if clear(p) and floor(p) and (not need_low or clear_low(p)):
+                        if s != self.side:
+                            self.side = s
+                            self.side_until = now + 2.0
+                        self._note("route finding: steering around obstacles (no game route here)")
+                        return p
         return target_pos  # boxed in: point at the target and let the wall cues help
 
 

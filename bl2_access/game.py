@@ -403,6 +403,85 @@ def trace_self_test(pawn: Any) -> str:
     return verdict
 
 
+def move_intent(pawn: Any, controller: Any = None) -> tuple[float, float] | None:
+    """Unit (x, y) direction you're pushing the stick or movement keys, or None if you aren't.
+    This is what you're trying to do, which still works when something stops you moving."""
+    try:
+        a = pawn.Acceleration
+        m = math.hypot(a.X, a.Y)
+        if m > 1:
+            return (a.X / m, a.Y / m)
+    except Exception:
+        pass
+    try:
+        pi = controller.PlayerInput
+        fwd, strafe = float(pi.aForward), float(pi.aStrafe)
+        if abs(fwd) + abs(strafe) > 0.01:
+            yaw = view_angles(controller)[0]
+            x = fwd * math.cos(yaw) - strafe * math.sin(yaw)
+            y = fwd * math.sin(yaw) + strafe * math.cos(yaw)
+            m = math.hypot(x, y)
+            return (x / m, y / m) if m else None
+    except Exception:
+        pass
+    return None
+
+
+def speed(pawn: Any) -> float:
+    """Horizontal speed in uu per second (0 if unknown)."""
+    try:
+        v = pawn.Velocity
+        return math.hypot(v.X, v.Y)
+    except Exception:
+        return 0.0
+
+
+def feet_z(pawn: Any) -> float | None:
+    loc = location(pawn)
+    if loc is None:
+        return None
+    try:
+        return loc[2] - float(pawn.CylinderComponent.CollisionHeight)
+    except Exception:
+        return loc[2] - 90
+
+
+def blockage(pawn: Any, angle: float, jump_height: float, reach: float = 120.0) -> dict:
+    """What's in the way in direction `angle` (radians): a low obstacle you could jump, a wall,
+    and whether the ways 60 degrees to each side are open. Uses line tests at knee, jump and
+    chest height."""
+    loc = location(pawn)
+    feet = feet_z(pawn)
+    if loc is None or feet is None:
+        return {}
+    x, y = loc[0], loc[1]
+
+    def line(a: float, height: float, r: float) -> bool | None:
+        return fast_trace(pawn, (x, y, feet + height), (x + math.cos(a) * r, y + math.sin(a) * r, feet + height))
+
+    def floor_at(a: float, r: float) -> bool:
+        px, py = x + math.cos(a) * r, y + math.sin(a) * r
+        return fast_trace(pawn, (px, py, feet + 30), (px, py, feet - 300)) is False
+
+    knee = line(angle, 40, reach)
+    if knee is None:
+        return {}
+    top = line(angle, jump_height, reach)
+    chest = line(angle, 130, reach)
+
+    def open_side(sign: int) -> bool:
+        a = angle + sign * math.radians(60)
+        return bool(line(a, 40, 200)) and bool(line(a, 130, 200)) and floor_at(a, 150)
+
+    return {
+        "knee_blocked": knee is False,
+        "jumpable": knee is False and top is True and chest is True,
+        "wall": knee is False and (top is False or chest is False),
+        "left_open": open_side(-1),
+        "right_open": open_side(1),
+    }
+
+
 def line_of_sight(controller: Any, target: Any) -> bool:
     try:
         return bool(controller.LineOfSightTo(target))

@@ -87,6 +87,7 @@ opt_quest_item_sounds = BoolOption("Quest item sounds", True, description="A pul
 opt_object_range = SliderOption("Object sound range (metres)", 15, 3, 40)
 opt_object_max = SliderOption("Object sounds at once", 4, 1, 6)
 opt_object_volume = SliderOption("Object sound volume", 70, 10, 100, step=5)
+opt_speak_blocked = BoolOption("Say when you're blocked", True, description="When you push against something and don't move, says what's in the way and which side is open, for example: Blocked, open to the left. Or: Low obstacle, jump over.")
 opt_jump = BoolOption("Jump cues", True, description="A rising 'boing' when there's an obstacle you can jump over, or a gap you can jump across.")
 opt_jump_height = SliderOption("Jump cue obstacle height (cm)", 100, 50, 200, step=10, description="How tall an obstacle can be and still count as jumpable.")
 opt_speak_jump = BoolOption("Speak jump cues", False, description="Also say 'Jump over' or 'Jump the gap'.")
@@ -116,7 +117,7 @@ OPTIONS = [
     GroupedOption("Targeting", [opt_targeting, opt_speak_target, opt_aim_mode, opt_aim_assist]),
     GroupedOption("Object sounds", [opt_loot_sounds, opt_container_sounds, opt_interactive_sounds, opt_quest_item_sounds,
                                     opt_object_range, opt_object_max, opt_object_volume]),
-    GroupedOption("Navigation", [opt_npc_sounds, opt_npc_range, opt_npc_max, opt_npc_talk, opt_interact, opt_lock_nav, opt_walls, opt_wall_dist, opt_ledges, opt_jump, opt_jump_height, opt_speak_jump, opt_low_health, opt_low_health_pct]),
+    GroupedOption("Navigation", [opt_npc_sounds, opt_npc_range, opt_npc_max, opt_npc_talk, opt_interact, opt_lock_nav, opt_walls, opt_wall_dist, opt_ledges, opt_jump, opt_jump_height, opt_speak_jump, opt_speak_blocked, opt_low_health, opt_low_health_pct]),
     GroupedOption("Sound glossary and volumes", list(SOUND_OPTS.values())),
 ]
 
@@ -149,6 +150,7 @@ def sync_settings() -> None:
     s.interact_prompts = opt_interact.value
     s.lock_nav = opt_lock_nav.value
     s.jump = opt_jump.value
+    s.speak_blocked = opt_speak_blocked.value
     s.loot_sounds = opt_loot_sounds.value
     s.container_sounds = opt_container_sounds.value
     s.interactive_sounds = opt_interactive_sounds.value

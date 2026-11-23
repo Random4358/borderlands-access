@@ -42,6 +42,7 @@ class Settings:
     jump: bool = True
     jump_height: float = 100.0   # unreal units the player clears with a jump
     speak_jump: bool = False
+    speak_blocked: bool = True       # "Blocked, open to the left" when you push into something
     low_health: bool = True
     low_health_pct: float = 30.0
     loot_sounds: bool = True         # continuous sounds for loot on the ground, by type
@@ -594,13 +595,29 @@ class Features:
                         audio.play("nav", snd.wall_click(pan, vol * self.s.volume * 0.7))
                         break
         moving = self.moving(snap.pawn)
-        if not moving or not (self.s.ledges or self.s.jump):
+        # What you're trying to do counts too: pushed up against something you aren't moving,
+        # and that's exactly when the jump cue and the "blocked" message are needed.
+        intent = game.move_intent(snap.pawn, snap.pc)
+        if intent is None and not moving:
+            self.stuck_since, self.stuck_told = None, False
+            return
+        angle = math.atan2(intent[1], intent[0]) if intent is not None else snap.yaw
+        if intent is not None and game.speed(snap.pawn) < 40:
+            if getattr(self, "stuck_since", None) is None:
+                self.stuck_since, self.stuck_told = now, False
+            elif now - self.stuck_since >= 0.6 and not getattr(self, "stuck_told", False):
+                self.stuck_told = True
+                self.announce_blocked(snap, angle)
+                return
+        else:
+            self.stuck_since, self.stuck_told = None, False
+        if not (self.s.ledges or self.s.jump):
             return
         try:
             feet = snap.eye[2] - float(snap.pawn.BaseEyeHeight) - float(snap.pawn.CylinderComponent.CollisionHeight)
         except Exception:
             feet = snap.eye[2] - 150
-        cx, cy = math.cos(snap.yaw), math.sin(snap.yaw)
+        cx, cy = math.cos(angle), math.sin(angle)
 
         def ground_at(d: float) -> bool:
             """Is there floor at distance d ahead, no more than a step down?"""
@@ -626,6 +643,26 @@ class Features:
             elif self.s.ledges and now >= self.next_ledge_ok:
                 audio.play("alert", snd.ledge_warning(0.0, self.s.volume))
                 self.next_ledge_ok = now + 1.5
+
+    def announce_blocked(self, snap: Snapshot, angle: float) -> None:
+        """You're pushing into something and not moving: say what it is and where it's open."""
+        b = game.blockage(snap.pawn, angle, self.s.jump_height)
+        if not b:
+            return
+        if b["jumpable"] and self.s.jump:
+            audio.play("alert", snd.ui("jump", self.s.volume))
+            if self.s.speak_blocked or self.s.speak_jump:
+                speech.say("Low obstacle. Jump over", interrupt=False)
+            self.next_jump_ok = time.perf_counter() + 1.2
+            return
+        if not self.s.speak_blocked:
+            return
+        audio.play("nav", snd.wall_click(0.0, self.s.volume))
+        left, right = b["left_open"], b["right_open"]
+        where = ("open left and right" if left and right else "open to the left" if left
+                 else "open to the right" if right else "turn around")
+        what = "Blocked" if b["knee_blocked"] else "Stuck"
+        speech.say(f"{what}, {where}", interrupt=False)
 
     def jump_cue(self, now: float, words: str) -> None:
         audio.play("alert", snd.ui("jump", self.s.volume))
