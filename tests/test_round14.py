@@ -186,7 +186,7 @@ print("steady beacon OK")
 # --- route finding: the beacon leads to each route point in turn, not through the wall
 me.Location = NS(X=0, Y=0, Z=0); world.pc.Rotation = NS(Pitch=0, Yaw=0, Roll=0)
 world.pc.route = [NS(Name="N1", Location=NS(X=0, Y=800, Z=0)), NS(Name="N2", Location=NS(X=1500, Y=800, Z=0))]
-NAV.beacon.route.supported = None; route_calls.clear()
+NAV.beacon.route.navmesh_ok = None; NAV.beacon.route.nodes_ok = None; route_calls.clear()
 f.beacon = True; drain(); tick()
 assert route_calls and NAV.beacon.last[2] > 0.9, NAV.beacon.last      # first point is hard right, not straight ahead
 me.Location = NS(X=0, Y=700, Z=0); NAV.beacon.route.next_update = 0; drain(); tick()   # reached N1
@@ -198,8 +198,8 @@ assert NAV.beacon.last[2] < -0.2, NAV.beacon.last                        # headi
 f.beacon = False; tick(); assert nav.q[-1:] and NAV.beacon.started is False
 # a controller with no route finding: straight line, and it stops asking
 del PC.FindPathToward
-NAV.beacon.route.supported = None; me.Location = NS(X=0, Y=0, Z=0); f.beacon = True; drain(); tick()
-assert NAV.beacon.route.supported is False and abs(NAV.beacon.last[2]) < 0.1
+NAV.beacon.route.navmesh_ok = None; NAV.beacon.route.nodes_ok = None; me.Location = NS(X=0, Y=0, Z=0); f.beacon = True; drain(); tick()
+assert NAV.beacon.route.nodes_ok is False and abs(NAV.beacon.last[2]) < 0.1
 f.beacon = False; tick()
 print("route finding OK")
 
@@ -215,7 +215,7 @@ assert abs(y) < 1 and world.pc.Rotation.Pitch == 0, world.pc.Rotation   # facing
 assert said[-1][0] == "Facing Red chest, 20 metres", said[-1]
 # with a route: faces the first route point
 def ftoward(s, a): return NS(Name="N1", Location=NS(X=0, Y=800, Z=0))
-PC.FindPathToward = ftoward; NAV.beacon.route.supported = None; NAV.beacon.route.reset()
+PC.FindPathToward = ftoward; NAV.beacon.route.navmesh_ok = None; NAV.beacon.route.nodes_ok = None; NAV.beacon.route.reset()
 f.face_objective(); y = ((world.pc.Rotation.Yaw + 32768) % 65536 - 32768) * 360 / 65536
 assert abs(y - 90) < 1 and said[-1][0].endswith("following the path"), (y, said[-1])
 del PC.FindPathToward

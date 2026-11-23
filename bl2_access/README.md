@@ -78,8 +78,10 @@ name, how many points you have in it out of the maximum, and its description. F8
   turns brighter ("on course"): walk forward.
 - **Distance**: it pulses faster as you get closer, and says "Arrived" when you get there.
 - **Height**: the pitch is a little higher when the target is above you and lower when below.
-- **Route**: where the level has a navigation network, it follows the game's own walking route one point at a time
-  instead of pointing straight through walls. Otherwise it points straight at the target.
+- **Route**: it leads you around walls and obstacles instead of straight through them. Where the level's navigation mesh
+  gives a walking route, it follows that one point at a time. Otherwise it steers by itself. When the straight line is
+  blocked, it tests the directions around you for one that's clear with floor under it, so it avoids drops, and leads you
+  that way, keeping to one side. If you keep walking but stop getting closer for 3 seconds, it tries the other side.
 
 **Lock-on navigation** (off by default; Navigation options, or the accessibility settings) turns you to face the way to go
 when you hold the modifier and click the right stick, or press the apostrophe key. It turns toward the beacon's target if
