@@ -298,6 +298,12 @@ print("mission (markers):", info.spoken())
 assert info.spoken() == "Mission: Blindsided. Now: Defend Claptrap", info.spoken()
 assert "Find Sir Hammerlock" not in info.spoken()
 assert any(n.startswith("mission entry fields:") for n in notes)
+# later, as in the game: everything up to the eye done, the marker still labelled "Defend Claptrap"
+progress[:] = [1, 1, 1, 1, 1, 0, 0, 0, 0]
+info = Q.active_mission(qpc)
+print("mission (stale marker):", info.spoken())
+assert info.spoken() == ("Mission: Blindsided. Still to do: Find Sir Hammerlock. Find new gear. Loot gear. "
+                         "Return to Claptrap"), info.spoken()
 print("current objective OK")
 m.on_disable()
 print("ALL ROUND 24 TESTS OK")

@@ -77,11 +77,15 @@ class MissionInfo:
             if not self.stage_known:
                 # Without the current stage, the mission's list includes later stages that
                 # haven't started. The game's markers show what's live, so those come first.
+                # A marker can keep the label of an objective you've already done (seen in
+                # Blindsided: "Defend Claptrap" after it was done), so only unfinished ones count.
                 marked = [o for o in todo if o.text in self.marked]
-                todo = marked or [Objective(t) for t in self.marked] or todo[:2]
+                now = bool(marked)
+                todo = marked or todo
+            else:
+                now = True
             if todo:
-                parts.append(("Now: " if self.stage_known or self.marked else "Objectives: ")
-                             + ". ".join(o.spoken() for o in todo))
+                parts.append(("Now: " if now else "Still to do: ") + ". ".join(o.spoken() for o in todo))
             if self.stage_summary:
                 parts.append(self.stage_summary)
             elif not todo and self.summary:
