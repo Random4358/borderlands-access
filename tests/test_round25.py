@@ -172,5 +172,46 @@ r._climb_cue((88.0, 0.0, 0.0)); assert len(said) == 1        # once
 r.path_moves = ["walk", "walk", "drop", "walk"]; r.climb_told = set()
 r._climb_cue((85.0, 0.0, 0.0)); assert said[-1][0] == "Drop down here"
 print("climb cues OK")
+
+# --- starter paths that come with the mod: a new install uses them; what's learned here merges in
+import os, tempfile, json, time as _time
+real_starter, real_maps = W.STARTER_DIR, W.MAP_DIR
+W.STARTER_DIR, W.MAP_DIR = tempfile.mkdtemp(), tempfile.mkdtemp()
+json.dump({"version": 1, "cell": 120.0, "nodes": [[0, 0, 90, 5], [120, 0, 90, 5], [240, 0, 90, 5]],
+           "edges": [[0, 1], [1, 0], [1, 2], [2, 1]]}, open(os.path.join(W.STARTER_DIR, "Lvl_P.json"), "w"))
+g = W.WayGraph(); g.map = "Lvl_P"; notes.clear(); g.load()
+assert len(g.pos) == 3 and any("starter paths" in n and "nothing learned here yet" in n for n in notes), notes
+# learned here: one point the same as the starter's, one new beyond it
+json.dump({"version": 1, "cell": 120.0, "nodes": [[240, 0, 90, 2], [360, 0, 90, 1]], "edges": [[0, 1], [1, 0]]},
+          open(os.path.join(W.MAP_DIR, "Lvl_P.json"), "w"))
+g = W.WayGraph(); g.map = "Lvl_P"; g.load()
+assert len(g.pos) == 4, len(g.pos)                      # the shared point isn't doubled
+path, done = g.route((0.0, 0.0, 90.0), (360.0, 0.0, 90.0))
+a_ = g.keys[(2, 0, 1)]; b_ = g.keys[(3, 0, 1)]
+assert b_ in g.edges[a_] and a_ in g.edges[b_]           # starter and learned paths join up
+g.save(); saved = json.load(open(os.path.join(W.MAP_DIR, "Lvl_P.json")))
+assert len(saved["nodes"]) == 4                         # and from now on they're kept together
+W.STARTER_DIR, W.MAP_DIR = real_starter, real_maps
+print("starter paths OK")
+
+# --- the bundled Windshear Waste paths load and give real routes quickly
+g = W.WayGraph(); g.map = "Glacial_P"
+W.MAP_DIR = tempfile.mkdtemp()                          # as on a new install: nothing learned yet
+g.load(); W.MAP_DIR = real_maps
+print("bundled Glacial_P:", len(g.pos), "points")
+assert len(g.pos) > 1000
+# the largest connected group, and the point in it furthest from its first point
+start = max(range(len(g.pos)), key=lambda i: len(g.edges[i]))
+group, todo = {start}, [start]
+while todo:
+    u = todo.pop()
+    for v in g.edges[u]:
+        if v not in group: group.add(v); todo.append(v)
+far = max(group, key=lambda i: math.dist(g.pos[start][:2], g.pos[i][:2]))
+t0 = _time.perf_counter(); path, done = g.route(tuple(g.pos[start][:3]), tuple(g.pos[far][:3])); took = _time.perf_counter() - t0
+print(f"route across it: {len(path)} points, reached={done}, {took * 1000:.0f} ms, "
+      f"{math.dist(g.pos[start][:2], g.pos[far][:2]) / 100:.0f} m apart, group of {len(group)}")
+assert done and len(path) > 20 and took < 0.5
+print("bundled paths OK")
 m.on_disable()
 print("ALL ROUND 25 TESTS OK")

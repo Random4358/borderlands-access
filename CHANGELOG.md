@@ -10,7 +10,8 @@
   - The route planner climbs: stairs and ramps, ledges low enough to jump onto, and drops down, saying "Jump up here" or
     "Drop down here". A marker on a ledge is only reached at its height.
   - Learned paths: where you, enemies and NPCs walk is saved for each level and used for routes, along with the level's
-    path nodes.
+    path nodes. The mod comes with starter paths for Windshear Waste, so a new install doesn't start from nothing; what
+    you learn is added to them.
   - Corners are no longer cut so tightly that you snag on them.
 - **Missions**: the readout says the objectives of the mission's live stage ("Now: …") with that stage's summary, instead
   of every unfinished objective. Markers are named by the live objective. If a marker is above or below you, you're told

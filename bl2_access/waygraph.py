@@ -9,7 +9,9 @@ answers), so routes are built from things the mod *can* read:
    game's (enemies and NPCs walk the game's real navigation mesh), are sampled a few times a
    second. Two samples of the same character a short way apart are a step someone actually
    took, so they're linked. The result is saved per level in the mod's "maps" folder, so it
-   grows every time you or anyone else plays the level and is there after a restart.
+   grows every time you or anyone else plays the level and is there after a restart. The mod
+   also comes with starter paths for some levels ("starter_maps"), so a new install doesn't
+   start from nothing; they're merged with what's learned on your computer.
 
 A route is an A* search over these links from the point nearest you to the one nearest the
 target. If no known way reaches the target, it leads to the known point closest to it.
@@ -27,7 +29,8 @@ from typing import Any
 from . import game
 
 MOD_DIR = os.path.dirname(os.path.abspath(__file__))
-MAP_DIR = os.path.join(MOD_DIR, "maps")
+MAP_DIR = os.path.join(MOD_DIR, "maps")                 # learned on this computer
+STARTER_DIR = os.path.join(MOD_DIR, "starter_maps")     # comes with the mod
 
 CELL = 120.0          # uu: trail points are merged on a grid this size (~1.2 m)
 SAMPLE_EVERY = 0.25   # seconds between position samples
@@ -206,26 +209,48 @@ class WayGraph:
         self.next_save = time.perf_counter() + SAVE_EVERY
 
     def load(self) -> None:
-        path = self._file(self.map)
-        try:
-            with open(path, encoding="utf-8") as f:
-                data = json.load(f)
-        except FileNotFoundError:
+        """This level's paths: the starter paths that come with the mod (starter_maps), merged
+        with the ones learned on this computer (maps). Points in the same place are merged, so
+        loading both never doubles anything, and what's learned here is added on top."""
+        starter = self._read(os.path.join(STARTER_DIR, os.path.basename(self._file(self.map))), "starter")
+        own = self._read(self._file(self.map), "saved")
+        if starter is None and own is None:
             self._note(f"level layout: no saved paths for {self.map} yet; learning as you and others walk")
             return
+        before = len(self.pos)
+        for data in (starter, own):
+            if data:
+                self._merge(data)
+        self.version += 1
+        self._note(f"level layout: loaded {len(self.pos) - before} known points and "
+                   f"{sum(len(e) for e in self.edges.values())} links for {self.map}"
+                   f" ({'starter paths' if starter else 'no starter paths'}, "
+                   f"{'paths learned here' if own else 'nothing learned here yet'})")
+
+    def _read(self, path: str, what: str) -> dict | None:
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return None
         except Exception as e:  # noqa: BLE001
-            self._note(f"level layout: couldn't read saved paths ({e}); starting fresh")
-            return
+            self._note(f"level layout: couldn't read the {what} paths ({e}); skipping them")
+            return None
+
+    def _merge(self, data: dict) -> None:
+        ids: list[int] = []
         for x, y, z, n in data.get("nodes", []):
             key = (round(x / CELL), round(y / CELL), round(z / CELL))
-            i = self._new_node((x, y, z), key)
-            self.pos[i][3] = n
+            i = self.keys.get(key)
+            if i is None:
+                i = self._new_node((x, y, z), key)
+                self.pos[i][3] = n
+            else:
+                self.pos[i][3] = max(self.pos[i][3], n)
+            ids.append(i)
         for a, b in data.get("edges", []):
-            if 0 <= a < len(self.pos) and 0 <= b < len(self.pos):
-                self.edges[a].add(b)
-        self.version += 1
-        self._note(f"level layout: loaded {len(self.pos)} known points and "
-                   f"{sum(len(e) for e in self.edges.values())} links for {self.map}")
+            if 0 <= a < len(ids) and 0 <= b < len(ids) and ids[a] != ids[b]:
+                self.edges[ids[a]].add(ids[b])
 
     def save(self) -> None:
         self.next_save = time.perf_counter() + SAVE_EVERY
