@@ -5,6 +5,12 @@ via Prism), and adds directional sounds for enemies, aiming, loot, containers, i
 ledges and jumps. It also has a guidance beacon, interaction prompts, lock-on aiming, lock-on navigation and full
 controller support.
 
+> **Beta.** Borderlands Access is in beta and still changing quickly. Much of it has only been tested in the first area
+> of the game (Windshear Waste), and some features rely on best guesses about how the game works internally, so expect
+> rough edges: wrong or missing announcements, routes that lead somewhere unhelpful, or a feature that stays silent. If
+> something doesn't work, please open an issue and attach `sdk_mods\bl2_access\logs\diagnostic.log` from your game
+> folder. It records what the mod saw and did.
+
 ## Install
 
 1. Download `BorderlandsAccess-0.2.0.zip` from the [latest release](../../releases/latest) and extract the whole zip.
