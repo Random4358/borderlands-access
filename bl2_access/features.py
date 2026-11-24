@@ -419,7 +419,7 @@ class Features:
                 key = str(p.Name)
             except Exception:
                 key = str(id(p))
-            entry = Enemy(game.weak(p), key, pos, rel, game.line_of_sight(snap.pc, p))
+            entry = Enemy(game.weak(p), key, pos, rel, game.in_view(snap.pc, p, rel))
             (friends if friendly else found).append(entry)
         found.sort(key=lambda e: e.rel.dist)
         friends.sort(key=lambda e: e.rel.dist)

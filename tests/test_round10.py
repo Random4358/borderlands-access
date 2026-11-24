@@ -122,6 +122,8 @@ class Pawn:
     def GetMaxHealth(s): return 100
     def IsEnemy(s, o): return not getattr(o, "player", False) if s.player else True
     def FastTrace(s, e, st): return True
+    @property
+    def LastRenderTime(s): return 100.0 if getattr(s, "seen", True) else 40.0   # the game skips drawing hidden things
 me = Pawn("me", (0, 0, 0), player=True)
 ahead_e = Pawn("Bandit", (1000, 0, 0))          # dead centre: on target
 near_e = Pawn("Psycho", (1000, 90, 0))          # ~5 degrees right: nearly
@@ -134,9 +136,9 @@ objects.clear()
 class PC:
     def __init__(s):
         s.Pawn = me; s.Rotation = NS(Pitch=0, Yaw=0, Roll=0); s.PlayerInput = None
-        s.WorldInfo = NS(PawnList=me, GetMapName=lambda b: "Glacial_P", Pauser=None, GRI=NS())
+        s.WorldInfo = NS(PawnList=me, GetMapName=lambda b: "Glacial_P", Pauser=None, GRI=NS(), TimeSeconds=100.1)
         s.GFxUIManager = NS(FindFocusMovie=lambda: focus.movie)
-    def LineOfSightTo(s, p): return getattr(p, "seen", True)
+    def LineOfSightTo(s, p): return False   # like in the game: never works through the SDK
     def SetRotation(s, r): s.Rotation = r
 focus = NS(movie=None)
 world.pc = PC()
@@ -166,6 +168,8 @@ assert v["Bandit"].kind == "enemy_locked" and v["Bandit"].cycles == A.LOCKED_CYC
 assert v["Psycho"].kind == "enemy_near" and v["Psycho"].pan > 0
 assert v["Nomad"].cycles > A.ENEMY_BASE and v["Nomad"].pan < 0          # above you: higher; left
 assert v["Marauder"].muffled and not v["Bandit"].muffled                  # behind cover: muffled
+# off screen the game draws nothing, whatever is in the way: not called "behind cover"
+side_e.seen = False; tick(); assert {e.key: e.visible for e in f.enemies}["Goliath"] is True; side_e.seen = True; tick()
 for st in eng.combat_streams:
     assert st.ahead() >= 0.1 - 1e-9
 assert played.count("target") == 1 and said[-1][0] == "Bandit"          # one lock click + name, no ticking

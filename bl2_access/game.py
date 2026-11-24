@@ -605,6 +605,49 @@ def openings(pawn: Any, reach: float = 250.0, step_deg: int = 30) -> list[float]
     return out
 
 
+_sight_logged = 0
+
+
+def in_view(controller: Any, target: Any, rel: "Relative") -> bool:
+    """Whether you can actually see the target: from when the game last drew it on screen.
+
+    The game skips drawing things hidden behind walls and cover (occlusion culling), so
+    something in front of you that hasn't been drawn in the last moment is behind something.
+    Off screen (behind you, far to the side), the game doesn't draw it whatever is in the way,
+    so it counts as seen rather than wrongly calling it hidden. (The game's own LineOfSightTo
+    doesn't work through the mod manager: it said everything was behind cover.)"""
+    global _sight_logged
+    try:
+        now = float(controller.WorldInfo.TimeSeconds)
+    except Exception:
+        return True
+    last = None
+    for get in (lambda: target.LastRenderTime, lambda: target.Mesh.LastRenderTime):
+        try:
+            t = float(get())
+        except Exception:
+            continue
+        last = t if last is None else max(last, t)
+    if last is None:
+        return True
+    on_screen = math.degrees(rel.aim_error) <= 30   # well inside the screen, from the crosshair
+    seen = (now - last) < 0.3 if on_screen else True
+    if _sight_logged < 6 and on_screen:
+        _sight_logged += 1
+        try:
+            from . import trace
+
+            try:
+                los = controller.LineOfSightTo(target)
+            except Exception as e:  # noqa: BLE001
+                los = f"error {type(e).__name__}"
+            trace.note(f"sight: {class_name(target)} {rel.dist / 100:.0f} m ahead: last drawn {now - last:.2f} s ago "
+                       f"-> {'seen' if seen else 'behind cover'}; the game's LineOfSightTo said {los!r}")
+        except Exception:
+            pass
+    return seen
+
+
 def line_of_sight(controller: Any, target: Any) -> bool:
     try:
         return bool(controller.LineOfSightTo(target))
