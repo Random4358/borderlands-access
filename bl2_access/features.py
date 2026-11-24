@@ -38,6 +38,7 @@ class Settings:
     npc_max: int = 2
     npc_talk: bool = True
     interact_prompts: bool = True    # "Chest. Press X to open" when you can use something
+    loot_style: str = "steady"       # "steady" tones, or "game": the game's drop sounds on repeat
     use_assist: bool = True          # Use opens the announced object even if not aimed exactly at it
     lock_nav: bool = False         # Modifier + right stick click turns you toward the objective
     jump: bool = True

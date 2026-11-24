@@ -116,14 +116,28 @@ options) has three settings:
 **Object sounds**: the nearest few things around you (within 15 m, 4 at once by default) each play their own steady
 sound for as long as they're there. Each sound is panned to where the object is, gets louder as you get closer, and is
 muffled when the object is behind you, so you can turn until it's centred and walk to it.
-- **Weapons and gear** (guns, shields, grenade mods, class mods, relics): a bright two-note shimmer.
-- **Ammo and health**: a low, soft hum that gently swells.
-- **Money and eridium**: a high sparkle.
-- **Other loot on the ground**: a plain steady tone.
-- **Chests, lockers and other containers**: a woody low buzz. It stops once you've opened the container, if the game
+- **Weapons**: a steady ring, like a held bell. The rarer the gun, the higher it rings: common, uncommon, rare, epic,
+  legendary, then pearlescent and better.
+- **Shields, grenade mods, class mods and relics**: a steady hollow tone, rising with rarity the same way.
+- **Ammo**: a low, steady hum.
+- **Health**: a soft, warm two-note chord.
+- **Money and eridium**: a soft, very high steady tone.
+- **Other loot on the ground**: a soft, low steady tone.
+- **Chests, lockers and other containers**: a woody low throb. It stops once you've opened the container, if the game
   reports that.
-- **Doors, switches, vendors and fast travel stations**: a mid warble.
-- **Quest items and mission objects**: a pulsing two-tone chord. These always get a sound before anything else.
+- **Doors, switches, vendors and fast travel stations**: a steady hollow tone.
+- **Quest items and mission objects**: a steady two-note chord. These always get a sound before anything else.
+
+Nothing else uses the middle of the pitch range, which is kept for the beacon, and the beacon is always the loudest
+sound. Object sounds get quieter while the beacon or enemy tones are playing, the beacon's own target doesn't also play
+its object sound, and several things of the same kind side by side play as one.
+
+**Loot sound style** (Object sounds options): if you'd rather not have held tones, choose "Game's drop sounds". Each item
+on the ground then repeats the sound the game played when it dropped, every 1 to 3 seconds (more often as you get
+closer), played on the item so the game's own 3D sound places it. The mod learns these sounds as loot drops near you and
+remembers them for that kind and rarity of item (in game_sounds.json), so after one rare gun has dropped, every rare gun
+uses its sound. Until a sound has been learned, the item plays a short burst of its tone at the same pace instead. The
+game's sounds follow the game's own sound effects volume, not the mod's sliders.
 
 A sound fades out when you pick the item up, open the container, or move out of range, and every object sound goes quiet
 while a menu is open. Each type can be switched off, and the range, number at once and volume set, in the Object sounds

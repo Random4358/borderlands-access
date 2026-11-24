@@ -92,6 +92,7 @@ def call(cls, fn, obj, kind=Type.PRE, **args):
 from bl2_access import audio as A
 from bl2_access.audio import audio as eng
 from bl2_access.object_sounds import objects as OS, _still_usable
+import bl2_access.object_sounds as OS_mod
 
 class FakeStream:
     def __init__(s): s.q = []
@@ -218,5 +219,49 @@ got = {a.Name: OS._classify(a, True) for a in (blue, shield, vial, bullets)}
 print("kinds:", got)
 assert got == {"BlueGun": "weapon3", "PurpleShield": "item4", "Vial": "health", "Bullets": "ammo"}, got
 print("loot kinds OK")
+
+# --- "Game's drop sounds" style: the game's own drop sound, learned and replayed on the item
+import tempfile, os as _os
+from bl2_access import game_sounds as GS
+GS.STORE = _os.path.join(tempfile.mkdtemp(), "game_sounds.json")
+GS.sounds.by_item.clear(); GS.sounds.by_kind.clear(); GS.sounds.saved.clear()
+m.opt_loot_style.value = "Game's drop sounds"; m.opt_object_max.value = 4
+for st in eng.streams: st.q = []
+plays = []
+def pickup(name, loc, rarity):
+    a = Actor(name, loc)
+    a.Inventory.RarityLevel = rarity
+    a.PlayAkEvent = lambda ev, a=a: plays.append((a.Name, ev.Name))
+    return a
+g1 = pickup("RareGun1", (300.0, 100.0, 0.0), 3); g2 = pickup("RareGun2", (300.0, -500.0, 0.0), 3)
+g3 = pickup("CommonGun", (-400.0, 0.0, 0.0), 1)
+objects["WillowPickup"] = [g1, g2, g3]
+OS.kinds.clear(); OS.sources.clear(); OS.next_scan = 0; tick()
+assert {OS.sources[k].kind for k in OS.sources} == {"weapon3", "weapon1"}, {k: v.kind for k, v in OS.sources.items()}
+# the game plays the rare gun's drop sound (and an unrelated sound nearby, which isn't used)
+hook = hooked[("Engine.Actor:PlayAkEvent", Type.PRE)]
+drop_ev = NS(Class=cls("AkEvent"), Name="Play_Weapon_Drop_Rare", _path_name=lambda: "Sounds.Play_Weapon_Drop_Rare")
+other = NS(Class=cls("AkEvent"), Name="Play_Footstep_Snow")
+hook(g1, NS(InEvent=other), None, None)
+assert not GS.sounds.by_kind
+hook(g1, NS(InEvent=drop_ev), None, None)
+assert GS.sounds.by_kind.get("weapon3") is drop_ev and GS.sounds.saved["weapon3"][1] == "Sounds.Play_Weapon_Drop_Rare"
+assert _os.path.exists(GS.STORE)                     # remembered for next time
+# next ticks: both rare guns repeat that sound on themselves; the common gun gets a short burst
+for src in OS.sources.values(): src.next_blip = 0.0
+for st in eng.streams: st.q = []
+tick()
+print("game sounds played:", plays)
+assert ("RareGun1", "Play_Weapon_Drop_Rare") in plays and ("RareGun2", "Play_Weapon_Drop_Rare") in plays
+common = next(v for v in OS.sources.values() if v.kind == "weapon1")
+burst = len(eng.streams[common.slot].q)
+assert burst == OS_mod.BLIP_SEGMENTS, burst
+# and nothing more until it's due again (not continuous)
+n = len(plays); tick(); tick()
+assert len(plays) == n and len(eng.streams[common.slot].q) == burst
+# the replays themselves aren't learned again as new sounds
+assert not GS.sounds.replaying
+m.opt_loot_style.value = "Steady tones"
+print("game drop sounds OK")
 m.on_disable()
 print("ALL ROUND 22 TESTS OK")

@@ -21,6 +21,9 @@ from .audio import audio
 RESCAN = 0.5      # seconds between looking for objects (positions update every frame)
 LEAD = 0.2        # seconds of sound kept queued ahead on each stream
 
+BLIP_SEGMENTS = 5          # a burst of the mod's tone, for items with no learned game sound
+LOOT_KINDS = ("weapon", "item", "ammo", "health", "money", "loot", "quest")
+
 PICKUP_KIND = {
     "Weapons and gear": "gear",
     "Ammo and health": "ammo",
@@ -86,6 +89,8 @@ class Source:
     pan: float = 0.0
     vol: float = 0.0
     behind: bool = False
+    pickup: bool = False      # loot on the ground (follows the loot sound style)
+    next_blip: float = 0.0    # "game's drop sounds" style: when it next sounds
 
 
 def _still_usable(obj: Any) -> bool:
@@ -157,7 +162,8 @@ class ObjectSounds:
             "money": s.loot_sounds, "loot": s.loot_sounds,
             "quest": s.quest_item_sounds, "container": s.container_sounds, "interactive": s.interactive_sounds,
         }
-        found: list[tuple[float, str, Any, str]] = []
+        found: list = []
+        seen_pickups: set[str] = set()
 
         def consider(actor: Any, is_pickup: bool) -> None:
             kind = self._classify(actor, is_pickup)
@@ -175,9 +181,14 @@ class ObjectSounds:
                 key = actor._path_name()
             except Exception:
                 key = str(id(actor))
+            if is_pickup:
+                from .game_sounds import sounds as game_sounds
+
+                game_sounds.note_item(key, pos, kind)   # so its drop sound can be recognised
+                seen_pickups.add(key)
             if key == self.focus_key:
                 return   # the beacon is leading you to it: two sounds in one place would clash
-            found.append((d, key, actor, kind, pos))
+            found.append((d, key, actor, kind, pos, is_pickup))
 
         if s.loot_sounds or s.quest_item_sounds:
             for a in game.world_actors(["WillowPickup"]):
@@ -185,6 +196,12 @@ class ObjectSounds:
         if s.container_sounds or s.interactive_sounds or s.quest_item_sounds:
             for a in game.world_actors(["WillowInteractiveObject", "WillowVendingMachineBase"]):
                 consider(a, False)
+        try:
+            from .game_sounds import sounds as game_sounds
+
+            game_sounds.forget_items(seen_pickups)
+        except Exception:
+            pass
         # Quest items first, then nearest. A sound already playing gets a 3 m head start, so two
         # things at about the same distance don't keep swapping (which made the sound seem to
         # jump between objects).
@@ -197,7 +214,7 @@ class ObjectSounds:
             if any(g[3] == f[3] and math.dist(g[4][:2], f[4][:2]) < SAME_SPOT for g in picked):
                 continue
             picked.append(f)
-        return [f[:4] for f in picked[: max(1, min(int(s.object_max), snd.STREAMS))]]
+        return [(f[0], f[1], f[2], f[3], f[5]) for f in picked[: max(1, min(int(s.object_max), snd.STREAMS))]]
 
     # ------------------------------------------------------------ per frame
     def tick(self, s: Any, snap: Any, now: float) -> None:
@@ -215,22 +232,25 @@ class ObjectSounds:
             self.next_scan = now + RESCAN
             self._assign(self._wanted(s, snap))
         for src in list(self.sources.values()):
-            self._feed(src, s, snap)
+            if src.pickup and getattr(s, "loot_style", "steady") == "game":
+                self._blip(src, s, snap, now)
+            else:
+                self._feed(src, s, snap)
 
-    def _assign(self, wanted: list[tuple[float, str, Any, str]]) -> None:
-        keep = {key for _d, key, _a, _k in wanted}
+    def _assign(self, wanted: list) -> None:
+        keep = {w[1] for w in wanted}
         for key in [k for k in self.sources if k not in keep]:
             self._release(self.sources.pop(key))
         used = {src.slot for src in self.sources.values()}
         free = [i for i in range(len(audio.streams)) if i not in used]
         free.sort(key=lambda i: audio.streams[i].ahead())  # silent ones first: let fades finish
-        for _d, key, actor, kind in wanted:
+        for _d, key, actor, kind, is_pickup in wanted:
             if key in self.sources or not free:
                 continue
             slot = free.pop(0)
             if audio.streams[slot].ahead() > 0:
                 audio.streams[slot].stop()  # a released sound is still fading here
-            self.sources[key] = Source(key, game.weak(actor), kind, slot)
+            self.sources[key] = Source(key, game.weak(actor), kind, slot, pickup=is_pickup)
 
     def _feed(self, src: Source, s: Any, snap: Any) -> None:
         actor = game.deref(src.ptr)
@@ -253,6 +273,36 @@ class ObjectSounds:
                 src.pan, src.vol, src.behind = rel.pan, vol, rel.behind
                 src.started = True
                 src.step += 1
+        except Exception:
+            self.sources.pop(src.key, None)
+
+    def _blip(self, src: Source, s: Any, snap: Any, now: float) -> None:
+        """"Game's drop sounds" style: every 1.2 to 3 seconds (more often when closer), the
+        item's own drop sound from the game, played on the item; if none has been learned for
+        it yet, a short burst of the mod's tone, panned to it."""
+        actor = game.deref(src.ptr)
+        pos = game.location(actor) if actor is not None else None
+        if pos is None:
+            self.sources.pop(src.key, None)
+            return
+        if now < src.next_blip:
+            return
+        rel = game.relative(snap.eye, snap.yaw, snap.pitch, pos)
+        far = min(1.0, rel.dist / max(1.0, s.object_range))
+        src.next_blip = now + 1.2 + 1.8 * far
+        from .game_sounds import sounds as game_sounds
+
+        sound = game_sounds.sound_for(src.key, src.kind)
+        if sound is not None and game_sounds.play(actor, sound):
+            return
+        try:
+            stream = audio.streams[src.slot]
+            vol = (0.1 + 0.6 * (1.0 - far) ** 1.5) * s.volume * s.object_volume * self.duck
+            for i in range(BLIP_SEGMENTS):
+                fade = 1 if i == 0 else (-1 if i == BLIP_SEGMENTS - 1 else 0)
+                stream.feed(snd.loop_segment(src.kind, src.step, rel.pan, vol, rel.behind, fade))
+                src.step += 1
+            src.started = False   # the burst ends faded out: nothing to fade on release
         except Exception:
             self.sources.pop(src.key, None)
 

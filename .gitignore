@@ -9,3 +9,4 @@ bl2_access/helper/python_path.txt
 *.bl2access.bak
 bl2_access/maps/
 loot_sounds_preview.wav
+bl2_access/game_sounds.json

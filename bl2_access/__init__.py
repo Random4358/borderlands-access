@@ -81,6 +81,7 @@ opt_interact = BoolOption("Interaction prompts", True, description="When you're 
 opt_lock_nav = BoolOption("Lock-on navigation", False, description="When on, hold the modifier and click the right stick (or press the apostrophe key) to turn and face the way to your objective: the beacon's target if you've picked one, otherwise the nearest marker of your tracked mission. It follows the game's walking route when there is one. When off, that button says your heading.")
 opt_npc_talk = BoolOption("Say who you can talk to", True, description="Says 'Talk to' and the character's name when you're next to them and facing them.")
 opt_ledges = BoolOption("Ledge warnings", True)
+opt_loot_style = DropdownOption("Loot sound style", "Steady tones", ["Steady tones", "Game's drop sounds"], description="Steady tones: each item on the ground has a held tone (weapons ring higher the rarer they are). Game's drop sounds: each item instead repeats the sound the game played when it dropped, every couple of seconds, more often as you get closer. Items whose drop sound hasn't been heard yet play a short burst of the mod's tone instead. Drop sounds are learned as loot drops near you and remembered for that kind and rarity of item.")
 opt_loot_sounds = BoolOption("Loot sounds", True, description="Steady sounds for loot on the ground, a different one for weapons and gear, ammo and health, money, and other loot. They pan to where the item is and get louder as you get closer.")
 opt_container_sounds = BoolOption("Container sounds", True, description="A steady low buzz for chests, lockers and other containers you haven't opened.")
 opt_interactive_sounds = BoolOption("Interactive object sounds", True, description="A steady warble for doors, switches, vendors and fast travel stations.")
@@ -116,7 +117,7 @@ OPTIONS = [
     GroupedOption("Controller and menus", [opt_modifier, opt_menu_sounds, opt_menu_announce, opt_menu_reader, opt_menu_desc]),
     GroupedOption("Enemy radar", [opt_radar, opt_enemy_sound, opt_enemy_volume, opt_radar_range, opt_radar_max, opt_radar_hidden, opt_all_ai]),
     GroupedOption("Targeting", [opt_targeting, opt_speak_target, opt_aim_mode, opt_aim_assist]),
-    GroupedOption("Object sounds", [opt_loot_sounds, opt_container_sounds, opt_interactive_sounds, opt_quest_item_sounds,
+    GroupedOption("Object sounds", [opt_loot_sounds, opt_loot_style, opt_container_sounds, opt_interactive_sounds, opt_quest_item_sounds,
                                     opt_object_range, opt_object_max, opt_object_volume]),
     GroupedOption("Navigation", [opt_npc_sounds, opt_npc_range, opt_npc_max, opt_npc_talk, opt_interact, opt_use_assist, opt_lock_nav, opt_walls, opt_wall_dist, opt_ledges, opt_jump, opt_jump_height, opt_speak_jump, opt_speak_blocked, opt_low_health, opt_low_health_pct]),
     GroupedOption("Sound glossary and volumes", list(SOUND_OPTS.values())),
@@ -154,6 +155,7 @@ def sync_settings() -> None:
     s.jump = opt_jump.value
     s.speak_blocked = opt_speak_blocked.value
     s.loot_sounds = opt_loot_sounds.value
+    s.loot_style = "game" if str(opt_loot_style.value).startswith("Game") else "steady"
     s.container_sounds = opt_container_sounds.value
     s.interactive_sounds = opt_interactive_sounds.value
     s.quest_item_sounds = opt_quest_item_sounds.value
@@ -233,6 +235,12 @@ def on_enable() -> None:
     backend = speaker.start(prefer, prism_stdcall=opt_prism_stdcall.value)
     hooks.PRE_TICK = _on_tick_sync
     hooks.register()
+    try:   # learn the game's loot drop sounds (for the "Game's drop sounds" style)
+        from .game_sounds import sounds as game_sounds
+
+        game_sounds.register()
+    except Exception as e:  # noqa: BLE001
+        print(f"[Borderlands Access] game loot sounds unavailable: {e}")
     reader.register()
     from .mod_menu import modmenu
 
@@ -265,6 +273,12 @@ def on_disable() -> None:
 
     modmenu.is_open = False
     hooks.unregister()
+    try:
+        from .game_sounds import sounds as game_sounds
+
+        game_sounds.unregister()
+    except Exception:
+        pass
     reader.unregister()
     try:
         from .status_reader import status
