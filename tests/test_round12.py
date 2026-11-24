@@ -196,11 +196,15 @@ chest.bIsUsable = True
 # gear: pick up / equip; keyboard names
 me.Location = NS(X=1850, Y=0, Z=0); m.state.last_device = "keyboard"; step()
 print("gun:", said[-1][0]); assert said[-1][0] == "Bandit SMG. Press E to pick up, hold E to equip", said[-1]
-# behind you, or out of sight: no prompt
+# behind you: no "press" prompt, but you're told where it is so you can turn to it (once)
 me.Location = NS(X=0, Y=-1820, Z=0); world.pc.Rotation = NS(Pitch=0, Yaw=16384, Roll=0)    # facing away from the door (it is toward -Y)
-n = len(said); step(); assert len(said) == n
-world.pc.Rotation = NS(Pitch=0, Yaw=-16384, Roll=0); door.seen = False; step(); assert len(said) == n
-door.seen = True; step(); assert said[-1][0] == "Door Bunker. Press E to use", said[-1]
+n = len(said); step()
+assert len(said) == n + 1 and said[-1][0] == "Door Bunker within reach, 6 o'clock. Turn to it", said[-1:]
+step(); assert len(said) == n + 1
+# the game's sight check doesn't work through the SDK, so it no longer hides prompts
+world.pc.Rotation = NS(Pitch=0, Yaw=-16384, Roll=0); door.seen = False; step()
+assert said[-1][0] == "Door Bunker. Press E to use", said[-1]
+door.seen = True
 # right next to it, the sight check failing (objects often block it with their own shape) doesn't stop the prompt
 me.Location = NS(X=0, Y=-1500, Z=0); step(); door.seen = False; me.Location = NS(X=0, Y=-1880, Z=0); step()
 assert said[-1][0] == "Door Bunker. Press E to use", said[-1]
@@ -210,6 +214,13 @@ m.state.last_device = "pad"; me.Location = NS(X=0, Y=0, Z=0); world.pc.Rotation 
 assert said[-1][0].startswith("Chest Red. Press X"), said[-1]
 key("Q"); key("Q", False); assert m.state.last_device == "keyboard"
 key("XboxTypeS_DPad_Up"); key("XboxTypeS_DPad_Up", False); assert m.state.last_device == "pad"
+# the weapon locker case from the game: its position is at its base, 2.2 m below your eyes,
+# and you're 0.8 m in front of it; the prompt must still come
+me.Location = NS(X=-400, Y=0, Z=0); step()
+me.Location = NS(X=70, Y=0, Z=157); me.BaseEyeHeight = 64; world.pc.Rotation = NS(Pitch=0, Yaw=0, Roll=0)
+n = len(said); step()
+assert len(said) == n + 1 and said[-1][0].startswith("Chest Red. Press X"), said[-1:]
+me.Location = NS(X=0, Y=0, Z=0); me.BaseEyeHeight = 0
 # switched off: no prompts
 m.opt_interact.value = False; me.Location = NS(X=-400, Y=0, Z=0); step(); me.Location = NS(X=0, Y=0, Z=0)
 n = len(said); step(); assert len(said) == n

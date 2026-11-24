@@ -469,40 +469,61 @@ class Features:
             speech.say(f"Talk to {game.display_name(actor)}. Press {use_button()}")
             return
 
-    USE_RANGE = 220.0     # ~2 m: about where the game shows its Use prompt
+    USE_RANGE = 230.0     # uu across the floor: about where the game shows its Use prompt
     USE_KEEP = 330.0      # the same object isn't announced again until you've moved this far away
     USE_ANGLE = 50.0      # degrees either side of where you're looking
+    USE_CLOSE = 110.0     # this close, it counts whichever way you face
+    USE_BELOW, USE_ABOVE = 150.0, 260.0  # how far below your feet / above them the object's base may be
 
     def interact_prompt(self, snap: Snapshot, now: float) -> None:
         """When something usable is right in front of you, say what it is and which button uses
-        it: "Red chest. Press X to open". Each object is announced once until you walk away."""
+        it: "Weapon locker. Press X to open". Each object is announced once until you walk away.
+        If it's within reach but you're not facing it, say where it is so you can turn to it.
+
+        Distance is measured across the floor from your body, not from your eyes: objects'
+        positions are usually at their base, which from eye height made a cabinet right in front
+        of you seem out of reach. The game's sight check isn't used (it doesn't work through
+        the mod manager, and always said "can't see it")."""
         if now >= self.next_use_scan:
             self.next_use_scan = now + 0.5
             self.use_candidates = nearby_usables(snap, 900.0)
-        best = None
+        body = game.location(snap.pawn) or snap.eye
+        feet = game.feet_z(snap.pawn)
+        if feet is None:
+            feet = body[2] - 90
+        best, beside = None, None
         for ptr, key, verb, name in self.use_candidates:
             actor = game.deref(ptr)
             pos = game.location(actor) if actor is not None else None
             if pos is None:
                 continue
+            flat = math.hypot(pos[0] - body[0], pos[1] - body[1])
+            rise = pos[2] - feet
             rel = game.relative(snap.eye, snap.yaw, snap.pitch, pos)
-            if key == self.use_key:
-                if rel.dist > self.USE_KEEP or abs(math.degrees(rel.rel_yaw)) > self.USE_ANGLE + 25:
-                    self.use_key = None  # walked away: it can be announced again
-            if rel.dist > self.USE_RANGE or abs(math.degrees(rel.rel_yaw)) > self.USE_ANGLE:
+            angle = abs(math.degrees(rel.rel_yaw))
+            if key == self.use_key and (flat > self.USE_KEEP or (flat > self.USE_CLOSE and angle > self.USE_ANGLE + 25)):
+                self.use_key = None  # walked or turned away: it can be announced again
+            if key == getattr(self, "beside_key", None) and flat > self.USE_KEEP:
+                self.beside_key = None
+            if flat > self.USE_RANGE or not (-self.USE_BELOW <= rise <= self.USE_ABOVE):
                 continue
-            # The game's sight check often fails against the object's own shape, so only use it
-            # to rule out things a little further off (likely the other side of a wall).
-            if rel.dist > 150 and not game.line_of_sight(snap.pc, actor):
-                continue
-            if best is None or rel.dist < best[0]:
-                best = (rel.dist, key, verb, name)
-        if best is None or best[1] == self.use_key:
+            if flat <= self.USE_CLOSE or angle <= self.USE_ANGLE:
+                if best is None or flat < best[0]:
+                    best = (flat, key, verb, name)
+            elif beside is None or flat < beside[0]:
+                beside = (flat, key, name, rel)
+        if best is not None:
+            if best[1] == self.use_key:
+                return
+            _d, key, verb, name = best
+            self.use_key = key
+            audio.play("ui", snd.ui("prompt", self.s.volume))
+            speech.say(prompt_text(name, verb), interrupt=False)
             return
-        _d, key, verb, name = best
-        self.use_key = key
-        audio.play("ui", snd.ui("prompt", self.s.volume))
-        speech.say(prompt_text(name, verb), interrupt=False)
+        if beside is not None and beside[1] != getattr(self, "beside_key", None) and beside[1] != self.use_key:
+            _d, key, name, rel = beside
+            self.beside_key = key
+            speech.say(f"{name} within reach, {game.clock(rel.rel_yaw)}. Turn to it", interrupt=False)
 
     def radar(self, now: float) -> None:
         shown = [e for e in self.enemies if e.visible or self.s.radar_hidden][: self.s.radar_max]
@@ -918,10 +939,14 @@ class Features:
         if key.split(" @ ")[1] == getattr(self, "beacon_place", ""):
             key = getattr(self, "beacon_key", key)
         self.beacon_place, self.beacon_key = key.split(" @ ")[1], key
-        dist = nav_beacon.tick(self.s, snap, pos, poi.actor, key, now)
+        nav_beacon.tick(self.s, snap, pos, poi.actor, key, now)
+        # Measured across the floor from your body: things' positions are at their base, so from
+        # eye height a cabinet in front of you was over 2 m "away" and you never arrived.
         # Objective markers with no object at them are areas, so "arrived" a little earlier.
-        arrive = 150 if poi.ptr is not None else 300
-        if dist < arrive:
+        body = game.location(snap.pawn) or snap.eye
+        flat = math.hypot(pos[0] - body[0], pos[1] - body[1])
+        arrive = 170 if poi.ptr is not None else 300
+        if flat < arrive and abs(pos[2] - body[2]) < 300:
             self.beacon = False
             nav_beacon.stop()
             audio.play("ui", snd.ui("select", self.s.volume))
