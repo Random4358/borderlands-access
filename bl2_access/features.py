@@ -1074,11 +1074,59 @@ class Features:
         body = game.location(snap.pawn) or snap.eye
         flat = math.hypot(pos[0] - body[0], pos[1] - body[1])
         arrive = 170 if poi.ptr is not None else 300
-        if flat < arrive and abs(pos[2] - body[2]) < 300:
-            self.beacon = False
-            nav_beacon.stop()
-            audio.play("ui", snd.ui("select", self.s.volume))
-            speech.say(f"Arrived at {poi.name}")
+        if flat >= arrive:
+            return
+        # Right below or above it isn't there: a marker on a ledge or an upper floor needs a way
+        # up (or down) first. Things sit at their base; a marker floats a little above the floor.
+        feet = game.feet_z(snap.pawn)
+        if feet is None:
+            feet = body[2] - 90
+        rise = pos[2] - feet
+        allow_up = 120 if poi.ptr is not None else 200
+        if rise > allow_up or rise < -150:
+            tag = f"{key}:{'up' if rise > 0 else 'down'}"
+            if getattr(self, "height_told", "") != tag:
+                self.height_told = tag
+                where = "above" if rise > 0 else "below"
+                here = self.things_at(snap, pos)
+                speech.say(f"{poi.name} is about {max(1, round(abs(rise) / 100))} metres {where} you. "
+                           f"Look for a way {'up' if rise > 0 else 'down'}, such as stairs, a ramp or a ledge to climb"
+                           + (f". Near it: {here}" if here else ""))
+            return
+        self.beacon = False
+        nav_beacon.stop()
+        audio.play("ui", snd.ui("select", self.s.volume))
+        here = self.things_at(snap, pos)
+        speech.say(f"Arrived at {poi.name}" + (f". Here: {here}" if here else ""))
+
+    def things_at(self, snap: Snapshot, pos: tuple, radius: float = 450.0) -> str:
+        """What's within a few metres of a spot (for arriving at a marker): containers not yet
+        opened, items on the ground, doors and switches, and people, nearest first, with which
+        way they are from you."""
+        from .object_sounds import _still_usable
+
+        found = []
+        for a in game.world_actors(["WillowInteractiveObject", "WillowVendingMachineBase"]):
+            cat, name = categorize_object(a)
+            if not cat or (cat == "Containers" and not _still_usable(a)):
+                continue
+            found.append((a, name))
+        for a in game.world_actors(["WillowPickup"]):
+            cat, name = categorize_pickup(a)
+            if cat and cat != "Money":
+                found.append((a, name))
+        for p in game.iter_pawns(snap.pc):
+            if p != snap.pawn and game.is_alive(p) and not game.is_hostile(snap.pawn, p, False):
+                found.append((p, game.display_name(p)))
+        near = []
+        for a, name in found:
+            q = game.location(a)
+            if q is None or math.dist(q, pos) > radius:
+                continue
+            rel = game.relative(snap.eye, snap.yaw, snap.pitch, q)
+            near.append((rel.dist, f"{name}, {game.describe(rel)}"))
+        near.sort()
+        return ". ".join(t for _d, t in near[:3])
 
     def nav_target(self, snap: Snapshot) -> tuple[str, Any, Any] | None:
         """(name, position, actor) to guide to: the beacon's entry if one is picked, else the

@@ -335,5 +335,42 @@ assert os.path.exists(OP.STORE) and OP.Opened().flag == ("State", "Opened")   # 
 op.tick(NS(WorldInfo=NS(GetMapName=lambda b: "Sanctuary_P")), 7.0)
 assert not op.used and op.flag
 print("opened containers OK")
+
+# --- the marker is named by the live objective (not the finished one the game left on it)
+blind_stage = NS(Name="FindGearSet", Class=NS(Name="MissionObjectiveSetDefinition"), ObjectiveDefinitions=[objs[6]])
+progress[:] = [1, 1, 1, 1, 1, 1, 0, 0, 0]
+trk.MissionList = [rec2(MissionDef=blind, Status=1, ObjectivesProgress=progress, ActiveObjectiveSet=blind_stage)]
+wps = Q.waypoints(qpc)
+assert wps and wps[0].label == "Find new gear", [w.label for w in wps]
+print("marker label OK")
+
+# --- arriving at a marker on a ledge: not "arrived" while it's 3 m up; what's near it is said
+from bl2_access import features as FE
+F_ = m.feats
+class Me2:
+    def __init__(s, z): s.Location = NS(X=0.0, Y=0.0, Z=z); s.CylinderComponent = NS(CollisionHeight=90); s.BaseEyeHeight = 60
+me2 = Me2(6464.0)
+chest = NS(Name="Chest_9", Class=NS(Name="WillowInteractiveObject"), Location=NS(X=150.0, Y=0.0, Z=6600.0), bIsUsable=True,
+           bDeleteMe=False, _path_name=lambda: "Glacial_P.TheWorld:PersistentLevel.Chest_9",
+           InteractiveObjectDefinition=NS(Name="IO_Chest_Red"))
+objects["WillowInteractiveObject"] = [chest]
+world.pc = NS(Pawn=me2, Rotation=NS(Pitch=0, Yaw=0, Roll=0), PlayerInput=None, FOVAngle=90.0,
+              WorldInfo=NS(PawnList=None, GetMapName=lambda b: "Glacial_P", Pauser=None, GRI=NS(MissionTracker=trk), TimeSeconds=0.0),
+              GFxUIManager=NS(FindFocusMovie=lambda: None))
+snap = FE.Snapshot(world.pc, me2, (0.0, 0.0, 6524.0), 0.0, 0.0)
+F_.pois = [FE.POI("Find new gear", None, "Quest objectives", pos=(100.0, 0.0, 6631.0))]
+F_.poi_index = 0; F_.beacon = True; said.clear()
+F_.beacon_tick(snap, 1.0)
+print("ledge:", said[-1][0])
+assert F_.beacon and said[-1][0].startswith("Find new gear is about 3 metres above you. Look for a way up"), said
+assert "Chest" in said[-1][0], said[-1]
+n = len(said); F_.beacon_tick(snap, 1.1); assert len(said) == n      # said once
+# up on the ledge: arrived, and told what's there
+me2.Location = NS(X=0.0, Y=0.0, Z=6640.0); snap = FE.Snapshot(world.pc, me2, (0.0, 0.0, 6700.0), 0.0, 0.0)
+F_.beacon_tick(snap, 2.0)
+print("arrived:", said[-1][0])
+assert not F_.beacon and said[-1][0].startswith("Arrived at Find new gear. Here: Chest"), said[-1]
+objects["WillowInteractiveObject"] = []
+print("arriving at raised markers OK")
 m.on_disable()
 print("ALL ROUND 24 TESTS OK")

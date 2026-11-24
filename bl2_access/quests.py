@@ -181,6 +181,29 @@ def _progress_counts(entry: Any, n: int) -> list[int] | None:
 _entry_logged = False
 
 
+def _live_objective_text(trk: Any, mission: Any) -> str:
+    """The first unfinished objective of the mission's live stage, or ''."""
+    if trk is None or mission is None:
+        return ""
+    entry = _entry_for(trk, mission)
+    stage = _active_set(entry)
+    if stage is None:
+        return ""
+    try:
+        stage_defs = list(stage.ObjectiveDefinitions)
+    except Exception:
+        return ""
+    defs = _objective_defs(mission)
+    counts = _progress_counts(entry, len(defs))
+    for i, d in enumerate(defs):
+        if not any(d == s for s in stage_defs):
+            continue
+        o = Objective(_text(d, "ProgressMessage") or _text(d, "Description"), counts[i] if counts else None, _needed(d))
+        if o.text and not o.done:
+            return o.text
+    return ""
+
+
 def _active_set(entry: Any) -> Any:
     """The current objective set from a mission's progress entry: whichever field holds a
     MissionObjectiveSetDefinition (the likely names first)."""
@@ -405,6 +428,7 @@ def waypoints(pc: Any) -> list[Waypoint]:
         _logged_layout = True
         trace.note("waypoint record fields: " + ", ".join(
             f"{n}={game.class_name(v) or type(v).__name__}" for n, v in _fields(records[0])))
+    live = _live_objective_text(trk, active)
     out: list[Waypoint] = []
     seen: set = set()
     for rec in records:
@@ -422,6 +446,8 @@ def waypoints(pc: Any) -> list[Waypoint]:
         mission, objective = found.get("mission"), found.get("objective")
         is_active = mission is None or active is None or mission == active
         text = (_text(objective, "ProgressMessage") if objective is not None else "") or "Objective waypoint"
+        if is_active and live:
+            text = live   # a marker can keep the label of a finished objective (Blindsided)
         if not is_active and mission is not None:
             text = f"{_text(mission, 'MissionName') or 'Other mission'}: {text}"
         out.append(Waypoint(text, game.weak(actor) if actor is not None else None, pos, is_active))
