@@ -145,6 +145,7 @@ MODIFIER_CHOICES = {
 }
 
 ADS_KEYS = {"XboxTypeS_LeftTrigger", "RightMouseButton"}
+USE_KEYS = {"XboxTypeS_X", "E"}
 MENU_MOVE = {"XboxTypeS_DPad_Up", "XboxTypeS_DPad_Down", "XboxTypeS_DPad_Left", "XboxTypeS_DPad_Right",
              "Up", "Down", "Left", "Right", "W", "S", "A", "D", "Gamepad_LeftStick_Up",
              "Gamepad_LeftStick_Down", "Gamepad_LeftStick_Left", "Gamepad_LeftStick_Right",
@@ -210,6 +211,8 @@ class InputState:
         """Return True to swallow the input."""
         if self.replaying:
             return False
+        if key[:10].lower() == "xboxtypes_":
+            key = "XboxTypeS_" + key[10:]   # the game names the X button "XboxTypes_X"
         if pressed:
             self.last_device = "pad" if key.startswith(("XboxTypeS_", "Gamepad_")) else "keyboard"
             from . import trace
@@ -292,6 +295,14 @@ class InputState:
 
         if pressed and menus.in_menu():
             self.menu_key(key, "ui")
+            return False
+
+        # Use assist: Use pressed while the mod has announced something in reach. The game only
+        # uses what your crosshair is on, so the mod uses the announced object itself.
+        if key in USE_KEYS and features.s.use_assist:
+            if pressed and features.use_announced():
+                self.swallowed.add(key)
+                return True
         return False
 
     def menu_key(self, key: str, source: str) -> None:

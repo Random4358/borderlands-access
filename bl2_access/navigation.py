@@ -573,6 +573,13 @@ def face(snap: Any, target_pos: tuple, target_actor: Any, key: str) -> tuple[flo
     """Turn to face the way to go (the next route point if there is one), view level.
     Returns (distance to the target, whether a route point was used)."""
     point = beacon.route.next_point(snap.pc, snap.eye, target_pos, target_actor, key, time.perf_counter(), snap.pawn)
-    _pitch, yaw = game.aim_rotation(snap.eye, point)
-    game.set_view(snap.pc, 0, yaw)
+    pitch, yaw = game.aim_rotation(snap.eye, point)
+    near = math.hypot(target_pos[0] - snap.eye[0], target_pos[1] - snap.eye[1]) < 400
+    if point == target_pos and near:
+        # Close to the thing itself: look at it (a little above its base), not level over the
+        # top of it, so the game's crosshair-based Use finds it.
+        pitch, _yaw = game.aim_rotation(snap.eye, (target_pos[0], target_pos[1], target_pos[2] + 60))
+    else:
+        pitch = 0   # travelling: keep the view level
+    game.set_view(snap.pc, pitch, yaw)
     return _dist(snap.eye, target_pos), point != target_pos

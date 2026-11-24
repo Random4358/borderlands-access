@@ -76,6 +76,7 @@ opt_wall_dist = SliderOption("Wall detection distance (metres)", 3, 1, 8)
 opt_npc_sounds = BoolOption("NPC sounds", True, description="A soft chime for friendly characters nearby: panned to where they are, faster when closer, muffled when behind you.")
 opt_npc_range = SliderOption("NPC sound range (metres)", 25, 5, 60)
 opt_npc_max = SliderOption("NPC sounds max characters", 2, 1, 5)
+opt_use_assist = BoolOption("Use assist", True, description="When an interaction prompt has just told you about something in reach, pressing Use (X, or E on the keyboard) uses that thing even if your crosshair isn't exactly on it.")
 opt_interact = BoolOption("Interaction prompts", True, description="When you're close to something you can use and facing it, a soft double tick, then its name and the button to press, for example: Red chest. Press X to open. Uses keyboard key names if you last used the keyboard.")
 opt_lock_nav = BoolOption("Lock-on navigation", False, description="When on, hold the modifier and click the right stick (or press the apostrophe key) to turn and face the way to your objective: the beacon's target if you've picked one, otherwise the nearest marker of your tracked mission. It follows the game's walking route when there is one. When off, that button says your heading.")
 opt_npc_talk = BoolOption("Say who you can talk to", True, description="Says 'Talk to' and the character's name when you're next to them and facing them.")
@@ -117,7 +118,7 @@ OPTIONS = [
     GroupedOption("Targeting", [opt_targeting, opt_speak_target, opt_aim_mode, opt_aim_assist]),
     GroupedOption("Object sounds", [opt_loot_sounds, opt_container_sounds, opt_interactive_sounds, opt_quest_item_sounds,
                                     opt_object_range, opt_object_max, opt_object_volume]),
-    GroupedOption("Navigation", [opt_npc_sounds, opt_npc_range, opt_npc_max, opt_npc_talk, opt_interact, opt_lock_nav, opt_walls, opt_wall_dist, opt_ledges, opt_jump, opt_jump_height, opt_speak_jump, opt_speak_blocked, opt_low_health, opt_low_health_pct]),
+    GroupedOption("Navigation", [opt_npc_sounds, opt_npc_range, opt_npc_max, opt_npc_talk, opt_interact, opt_use_assist, opt_lock_nav, opt_walls, opt_wall_dist, opt_ledges, opt_jump, opt_jump_height, opt_speak_jump, opt_speak_blocked, opt_low_health, opt_low_health_pct]),
     GroupedOption("Sound glossary and volumes", list(SOUND_OPTS.values())),
 ]
 
@@ -148,6 +149,7 @@ def sync_settings() -> None:
     s.npc_max = int(opt_npc_max.value)
     s.npc_talk = opt_npc_talk.value
     s.interact_prompts = opt_interact.value
+    s.use_assist = opt_use_assist.value
     s.lock_nav = opt_lock_nav.value
     s.jump = opt_jump.value
     s.speak_blocked = opt_speak_blocked.value

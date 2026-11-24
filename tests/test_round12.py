@@ -220,6 +220,19 @@ me.Location = NS(X=-400, Y=0, Z=0); step()
 me.Location = NS(X=70, Y=0, Z=157); me.BaseEyeHeight = 64; world.pc.Rotation = NS(Pitch=0, Yaw=0, Roll=0)
 n = len(said); step()
 assert len(said) == n + 1 and said[-1][0].startswith("Chest Red. Press X"), said[-1:]
+# use assist: X (which the game calls "XboxTypes_X") uses the announced locker for you,
+# and the press is kept from the game so it isn't used twice
+used = []
+chest.UsedBy = lambda user: used.append(user) or True
+r = key("XboxTypes_X"); key("XboxTypes_X", False)
+assert used == [me] and r is not None and r is not False, (used, r)
+assert m.controls.state.last_device == "pad"                 # still a controller, so "Press X"
+m.opt_use_assist.value = False
+m.features.features.s.use_assist = False
+used.clear(); r = key("XboxTypes_X"); key("XboxTypes_X", False)
+assert used == [], used                                     # switched off: the game handles it
+m.features.features.s.use_assist = True; m.opt_use_assist.value = True
+del chest.UsedBy
 me.Location = NS(X=0, Y=0, Z=0); me.BaseEyeHeight = 0
 # switched off: no prompts
 m.opt_interact.value = False; me.Location = NS(X=-400, Y=0, Z=0); step(); me.Location = NS(X=0, Y=0, Z=0)

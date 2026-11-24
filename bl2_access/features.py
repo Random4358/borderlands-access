@@ -38,6 +38,7 @@ class Settings:
     npc_max: int = 2
     npc_talk: bool = True
     interact_prompts: bool = True    # "Chest. Press X to open" when you can use something
+    use_assist: bool = True          # Use opens the announced object even if not aimed exactly at it
     lock_nav: bool = False         # Modifier + right stick click turns you toward the objective
     jump: bool = True
     jump_height: float = 100.0   # unreal units the player clears with a jump
@@ -524,6 +525,38 @@ class Features:
             _d, key, name, rel = beside
             self.beside_key = key
             speech.say(f"{name} within reach, {game.clock(rel.rel_yaw)}. Turn to it", interrupt=False)
+
+    def use_announced(self) -> bool:
+        """Use the object the interaction prompt announced, if it's still within reach.
+        True if the game accepted it (the button press is then kept from the game, so the
+        object isn't used twice)."""
+        from . import trace
+
+        key = self.use_key
+        if key is None or not self.s.interact_prompts:
+            return False
+        snap = self.snapshot()
+        if snap is None:
+            return False
+        for ptr, k, verb, name in self.use_candidates:
+            if k != key:
+                continue
+            actor = game.deref(ptr)
+            pos = game.location(actor) if actor is not None else None
+            if pos is None or "Pickup" in game.class_name(actor):
+                return False   # items on the ground: the game's own pick up / hold to equip
+            body = game.location(snap.pawn) or snap.eye
+            if math.hypot(pos[0] - body[0], pos[1] - body[1]) > self.USE_RANGE + 40:
+                return False
+            try:
+                result = actor.UsedBy(snap.pawn)
+            except Exception as e:  # noqa: BLE001
+                trace.note(f"use assist: {name}: UsedBy failed: {type(e).__name__}: {e}")
+                return False
+            ok = result is None or bool(result[0] if isinstance(result, tuple) else result)
+            trace.note(f"use assist: {name} ({game.class_name(actor)}): UsedBy returned {result!r}")
+            return ok
+        return False
 
     def radar(self, now: float) -> None:
         shown = [e for e in self.enemies if e.visible or self.s.radar_hidden][: self.s.radar_max]
