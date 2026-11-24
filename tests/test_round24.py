@@ -302,7 +302,7 @@ assert any(n.startswith("mission entry fields:") for n in notes)
 progress[:] = [1, 1, 1, 1, 1, 0, 0, 0, 0]
 info = Q.active_mission(qpc)
 print("mission (stale marker):", info.spoken())
-assert info.spoken() == ("Mission: Blindsided. Still to do: Find Sir Hammerlock. Find new gear. Loot gear. "
+assert info.spoken() == ("Mission: Blindsided. Objectives: Find Sir Hammerlock. Find new gear. Loot gear. "
                          "Return to Claptrap"), info.spoken()
 print("current objective OK")
 m.on_disable()

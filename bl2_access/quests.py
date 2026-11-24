@@ -85,7 +85,7 @@ class MissionInfo:
             else:
                 now = True
             if todo:
-                parts.append(("Now: " if now else "Still to do: ") + ". ".join(o.spoken() for o in todo))
+                parts.append(("Now: " if now else "Objectives: ") + ". ".join(o.spoken() for o in todo))
             if self.stage_summary:
                 parts.append(self.stage_summary)
             elif not todo and self.summary:
