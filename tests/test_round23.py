@@ -230,5 +230,34 @@ for k in range(6):
 assert g6.map == "Sample_P" and all(q[0] < 1000 for q in g6.pos) and len(g6.pos) >= 4
 assert sum(len(e) for e in g6.edges.values()) >= 3
 print("sampling characters OK")
+
+# --- Back + B: the full status readout
+class Gun:
+    Name = "SMG"; ReloadCnt = 18
+    def GetMaxClipSize(s): return 24
+    AmmoPool = NS(Data=NS(GetCurrentValue=lambda: 240.0))
+    def GetShortHumanReadableName(s): return "Bandit SMG"
+class Me:
+    def __init__(s):
+        s.Location = NS(X=0.0, Y=0.0, Z=0.0); s.BaseEyeHeight = 60; s.Weapon = Gun(); s.Name = "me"
+        s.Class = NS(Name="WillowPlayerPawn"); s.Controller = None; s.bDeleteMe = False; s.bHidden = False; s.NextPawn = None
+    def GetHealth(s): return 87
+    def GetMaxHealth(s): return 110
+    def GetShieldStrength(s): return 40
+    def GetMaxShieldStrength(s): return 70
+pri = NS(ExpLevel=3, ExpPoints=1500, ExpPointsToNextLevel=2000, ExpPointsForCurrentLevel=1000,
+         GetCurrencyOnHand=lambda i: (152, 0)[i], GeneralSkillPoints=1)
+me = Me()
+world.pc = NS(Pawn=me, Rotation=NS(Pitch=0, Yaw=0, Roll=0), PlayerReplicationInfo=pri, PlayerInput=None,
+              WorldInfo=NS(PawnList=me, GetMapName=lambda b: "Glacial_P", Pauser=None, GRI=NS()),
+              GFxUIManager=NS(FindFocusMovie=lambda: None))
+m.controls.menus.open.clear()
+said.clear(); notes.clear(); m.controls.ACTIONS[m.controls.COMBOS["XboxTypeS_B"]][1]()
+print("status:", said[-1][0])
+assert said[-1][0] == ("Health 87 of 110. Shield 40 of 70. Bandit SMG, 18 of 24 in the magazine, 240 spare. "
+                       "Level 3, 500 experience to level 4 (50 percent). 152 dollars. 1 skill point to spend"), said[-1]
+assert any(n.startswith("status readout values:") for n in notes)
+assert m.controls.COMBOS["XboxTypeS_X"] == "repeat"
+print("status readout OK")
 m.on_disable()
 print("ALL ROUND 23 TESTS OK")

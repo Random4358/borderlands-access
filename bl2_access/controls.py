@@ -82,7 +82,7 @@ on_toggle: Callable[[str, bool], None] = lambda attr, value: None
 
 ACTIONS: dict[str, tuple[str, Callable[[], None]]] = {
     "snap_aim": ("Aim at nearest enemy, press again to cycle", lambda: features.snap_aim()),
-    "status": ("Health, shield and weapon", lambda: features.report_status()),
+    "status": ("Status: health, shield, weapon and ammo, level and experience, money", lambda: _repeat() if menus.in_menu() else features.report_status()),
     "enemies": ("List nearby enemies", lambda: features.report_enemies()),
     "repeat": ("Repeat last speech, or re-read the highlighted menu entry", lambda: _repeat()),
     "poi_next": ("Next item in scanner category", lambda: features.cycle_poi(1)),
@@ -110,9 +110,9 @@ ACTIONS: dict[str, tuple[str, Callable[[], None]]] = {
 # Controller combos: modifier + key -> action.
 COMBOS: dict[str, str] = {
     "XboxTypeS_A": "snap_aim",
-    "XboxTypeS_X": "status",
+    "XboxTypeS_X": "repeat",
     "XboxTypeS_Y": "enemies",
-    "XboxTypeS_B": "repeat",
+    "XboxTypeS_B": "status",
     # Scanner: left/right picks a category, up/down moves through it, left trigger = beacon.
     "XboxTypeS_DPad_Up": "poi_prev",
     "XboxTypeS_DPad_Down": "poi_next",

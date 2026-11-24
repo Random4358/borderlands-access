@@ -6,7 +6,7 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Callable, Any
 
 from . import audio as snd
 from . import game
@@ -1060,32 +1060,89 @@ class Features:
         speech.say(". ".join(parts))
 
     def report_status(self) -> None:
+        """Health, shield, weapon and ammo, level and experience, money, eridium, skill points.
+        Each value is read from whichever of the likely game properties works; what was found
+        is logged once (diagnostic log), so a missing one can be put right."""
         snap = self.snapshot()
         if snap is None:
             speech.say("Not in game")
             return
+        found: dict[str, Any] = {}
+        pawn, pc = snap.pawn, snap.pc
+        try:
+            pri = pc.PlayerReplicationInfo
+        except Exception:
+            pri = None
+
+        def num(label: str, *getters: Callable[[], Any]) -> float | None:
+            for g in getters:
+                try:
+                    v = g()
+                    if isinstance(v, tuple):
+                        v = v[0]
+                    v = float(v)
+                except Exception:
+                    continue
+                if math.isfinite(v):
+                    found[label] = v
+                    return v
+            found[label] = None
+            return None
+
         parts = []
-        h = game.health(snap.pawn)
+        h = game.health(pawn)
         if h:
             parts.append(f"Health {h[0]:.0f} of {h[1]:.0f}")
-        for cur, mx in (("GetShieldStrength", "GetMaxShieldStrength"),):
-            try:
-                parts.append(f"Shield {getattr(snap.pawn, cur)():.0f} of {getattr(snap.pawn, mx)():.0f}")
-            except Exception:
-                pass
+        sh = num("shield", lambda: pawn.GetShieldStrength(), lambda: pawn.ShieldArmor.Data.GetCurrentValue(),
+                 lambda: pawn.ShieldArmor.Data.CurrentValue)
+        sh_max = num("shield max", lambda: pawn.GetMaxShieldStrength(), lambda: pawn.ShieldArmor.Data.GetMaxValue())
+        if sh is not None:
+            parts.append(f"Shield {sh:.0f}" + (f" of {sh_max:.0f}" if sh_max else ""))
         weapon = None
         try:
-            weapon = snap.pawn.Weapon
+            weapon = pawn.Weapon
         except Exception:
             pass
         if weapon is not None:
-            parts.append(game.display_name(weapon))
-            for getter in (lambda w: w.ReloadCnt, lambda w: w.GetAmmoCount()):
-                try:
-                    parts.append(f"{int(getter(weapon))} in magazine")
-                    break
-                except Exception:
-                    continue
+            w = game.display_name(weapon) or "Weapon"
+            mag = num("magazine", lambda: weapon.ReloadCnt, lambda: weapon.GetAmmoCount())
+            mag_max = num("magazine size", lambda: weapon.GetMaxClipSize(), lambda: weapon.MaxClipSize)
+            spare = num("spare ammo", lambda: weapon.AmmoPool.Data.GetCurrentValue(), lambda: weapon.AmmoPool.Data.CurrentValue)
+            if mag is not None:
+                w += f", {mag:.0f}" + (f" of {mag_max:.0f}" if mag_max else "") + " in the magazine"
+            if spare is not None:
+                w += f", {spare:.0f} spare"
+            parts.append(w)
+        else:
+            parts.append("No weapon in hand")
+        lvl = num("level", lambda: pri.ExpLevel, lambda: pc.GetCurrentExperienceLevel(), lambda: pawn.GetExpLevel())
+        xp = num("experience", lambda: pri.ExpPoints, lambda: pc.GetExpPoints())
+        xp_next = num("experience for next level", lambda: pri.ExpPointsToNextLevel)
+        xp_here = num("experience at this level", lambda: pri.ExpPointsForCurrentLevel)
+        if lvl is not None:
+            text = f"Level {lvl:.0f}"
+            if xp is not None and xp_next is not None and xp_next > xp:
+                text += f", {xp_next - xp:.0f} experience to level {lvl + 1:.0f}"
+                if xp_here is not None and xp_next > xp_here:
+                    text += f" ({(xp - xp_here) / (xp_next - xp_here) * 100:.0f} percent)"
+            elif xp is not None:
+                text += f", {xp:.0f} experience"
+            parts.append(text)
+        money = num("money", lambda: pri.GetCurrencyOnHand(0), lambda: pri.Currency[0].CurrentAmount)
+        if money is not None:
+            parts.append(f"{money:.0f} dollars")
+        eridium = num("eridium", lambda: pri.GetCurrencyOnHand(1), lambda: pri.Currency[1].CurrentAmount)
+        if eridium:
+            parts.append(f"{eridium:.0f} eridium")
+        points = num("skill points", lambda: pri.GeneralSkillPoints, lambda: pc.PlayerSkillTree.GetSkillPointsAvailable())
+        if points:
+            parts.append(f"{points:.0f} skill point{'s' if points != 1 else ''} to spend")
+        if not getattr(self, "status_logged", False):
+            self.status_logged = True
+            from . import trace
+
+            trace.note("status readout values: " + ", ".join(f"{k}={'not found' if v is None else f'{v:g}'}"
+                                                             for k, v in found.items()))
         speech.say(". ".join(parts) or "Status unavailable")
 
     def report_heading(self) -> None:

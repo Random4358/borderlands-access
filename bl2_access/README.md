@@ -8,7 +8,7 @@ An accessibility mod for Borderlands 2 that helps blind players. It gives you:
 - **Snap aim.** One button turns you to face the nearest visible enemy. Press it again within 2 seconds to cycle to the next enemy.
 - **Navigation sounds.** Soft clicks tell you there's a wall ahead, to your left or to your right. A falling tone warns you about a ledge ahead. A heartbeat plays when your health is low.
 - **Points of interest.** You can step through nearby NPCs, chests, vending machines, switches and loot. Each one is announced with its distance and a clock direction (12 o'clock is straight ahead). You can also turn on an audio **beacon** that guides you to the one you picked.
-- **Menu reading.** The highlighted entry is read aloud in the main menu, pause menu, options menus and the mod menu, with its position ("2 of 6"). Choice settings read their current value, sliders read their value and range, and changing a setting speaks the new value. Options menus also read each setting's help text. Pop-up dialogs read their title, message and highlighted button, and tutorial pop-ups are read aloud. Moving, selecting and going back each make a sound. Back + B (or F8) re-reads the highlighted entry.
+- **Menu reading.** The highlighted entry is read aloud in the main menu, pause menu, options menus and the mod menu, with its position ("2 of 6"). Choice settings read their current value, sliders read their value and range, and changing a setting speaks the new value. Options menus also read each setting's help text. Pop-up dialogs read their title, message and highlighted button, and tutorial pop-ups are read aloud. Moving, selecting and going back each make a sound. Back + B or Back + X (or F8) re-reads the highlighted entry.
 - **Full controller support.** Every feature works from the controller as a button combo, and also from keyboard keys.
 
 ## Install
@@ -43,9 +43,9 @@ You can choose a different modifier button in the mod options.
 | Back + … | Action |
 |---|---|
 | A | Aim at nearest enemy (press again to cycle) |
-| X | Health, shield, weapon, magazine |
+| X | Repeat last speech (in menus: re-read the highlighted entry) |
 | Y | List nearby enemies with directions |
-| B | Repeat last speech (in menus: re-read the highlighted entry) |
+| B | Status: health, shield, weapon, magazine and spare ammo, level and experience to the next level, money, eridium, unspent skill points (in menus: re-read the highlighted entry) |
 | D-pad right / left | Next / previous scanner category: Quest objectives, People, Weapons and gear, Ammo and health, Money, Containers, Vendors, Travel, Doors and switches, Other |
 | D-pad down / up | Next / previous item in that category |
 | Left trigger | Beacon on/off for the selected item |
@@ -71,7 +71,7 @@ may only be named after your first button press there. In the **inventory** (and
 highlight reads the whole item card: name, rarity, manufacturer and type, level, whether it's equipped, every stat (for
 example "Damage 11, Accuracy 89.3"), special effects, value, and any level requirement. When the game compares the item
 with the one you have equipped, each stat says "better", "worse" or "same". An empty equipped slot says "Empty slot". In the **skill tree** it reads the skill's
-name, how many points you have in it out of the maximum, and its description. F8 or Back + B repeats the last one.
+name, how many points you have in it out of the maximum, and its description. F8, Back + B or Back + X repeats the last one.
 
 **Beacon and lock-on navigation**: the beacon (Back + left trigger, or F11, on a scanner entry) is a steady tone:
 - **Direction**: panned the way to go, and muffled when that's behind you. Within about 7 degrees of the right way it
