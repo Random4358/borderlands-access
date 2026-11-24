@@ -9,6 +9,7 @@ picked up, opened, out of range, or when a menu is up.
 
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -67,8 +68,15 @@ def _still_usable(obj: Any) -> bool:
         return True
 
 
+SAME_SPOT = 200.0  # uu: things of the same kind this close together get one sound (a pile of ammo)
+BEACON_DUCK = 0.55  # object sounds while the beacon is on, so it stands out
+COMBAT_DUCK = 0.5   # and while enemy tones are playing
+
+
 class ObjectSounds:
     def __init__(self) -> None:
+        self.focus_key: str | None = None   # the beacon's target: its own loop is left out
+        self.duck = 1.0                     # set each frame by features.tick
         self.sources: dict[str, Source] = {}
         self.next_scan = 0.0
         self.kinds: dict[str, tuple[str, str]] = {}  # actor path -> (kind or "", name), per map
@@ -113,7 +121,9 @@ class ObjectSounds:
                 key = actor._path_name()
             except Exception:
                 key = str(id(actor))
-            found.append((d, key, actor, kind))
+            if key == self.focus_key:
+                return   # the beacon is leading you to it: two sounds in one place would clash
+            found.append((d, key, actor, kind, pos))
 
         if s.loot_sounds or s.quest_item_sounds:
             for a in game.world_actors(["WillowPickup"]):
@@ -126,7 +136,14 @@ class ObjectSounds:
         # jump between objects).
         playing = set(self.sources)
         found.sort(key=lambda f: (f[3] != "quest", f[0] - (300.0 if f[1] in playing else 0.0)))
-        return found[: max(1, min(int(s.object_max), snd.STREAMS))]
+        # Several things of the same kind side by side (a pile of ammo, a row of lockers) play as
+        # one sound: the same loop from almost the same place only muddies it.
+        picked: list = []
+        for f in found:
+            if any(g[3] == f[3] and math.dist(g[4][:2], f[4][:2]) < SAME_SPOT for g in picked):
+                continue
+            picked.append(f)
+        return [f[:4] for f in picked[: max(1, min(int(s.object_max), snd.STREAMS))]]
 
     # ------------------------------------------------------------ per frame
     def tick(self, s: Any, snap: Any, now: float) -> None:
@@ -173,7 +190,9 @@ class ObjectSounds:
                 return
             rel = game.relative(snap.eye, snap.yaw, snap.pitch, pos)
             closeness = 1.0 - min(1.0, rel.dist / max(1.0, s.object_range))
-            vol = (0.08 + 0.6 * closeness ** 1.5) * s.volume * s.object_volume
+            # Quieter than the beacon and enemy tones (those tell you where to go and what's
+            # shooting you), and quieter still while they're playing.
+            vol = (0.05 + 0.45 * closeness ** 1.5) * s.volume * s.object_volume * self.duck
             while stream.ahead() < LEAD:
                 fade = 0 if src.started else 1
                 stream.feed(snd.loop_segment(src.kind, src.step, rel.pan, vol, rel.behind, fade))

@@ -344,6 +344,22 @@ class Features:
             nav_beacon.stop()
             return
 
+        # Mixing: object sounds step back while the beacon or enemy tones are playing, and the
+        # beacon's own target doesn't also play its object sound.
+        from .object_sounds import BEACON_DUCK, COMBAT_DUCK
+
+        duck, focus = 1.0, None
+        if self.beacon and 0 <= self.poi_index < len(self.pois):
+            duck *= BEACON_DUCK
+            actor = self.pois[self.poi_index].actor
+            if actor is not None:
+                try:
+                    focus = actor._path_name()
+                except Exception:
+                    focus = None
+        if self.s.radar and self.s.enemy_tones and self.enemies:
+            duck *= COMBAT_DUCK
+        objects.duck, objects.focus_key = duck, focus
         objects.tick(self.s, snap, now)
         try:   # learn where characters walk, for routes (waygraph.py)
             from .waygraph import graph

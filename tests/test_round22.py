@@ -154,5 +154,38 @@ chest = NS(IsUsable=lambda *a: False, bHidden=False)          # a function that 
 assert _still_usable(chest) is True
 assert _still_usable(NS(bIsUsable=False)) is False
 print("opened-container check OK")
+
+# --- mixing: object sounds keep out of the beacon's pitch range
+for kind, (pattern, harmonics) in A.LOOPS.items():
+    for cycles, _amp in pattern:
+        for h, w in harmonics:
+            hz = round(cycles * h) * A.CYCLE
+            assert not (450 <= hz <= 1000 and w > 0.12), (kind, hz, w)   # the beacon lives at 500-1000 Hz
+print("pitch ranges OK")
+# a pile of the same kind plays as one sound; different kinds side by side still both play
+m.opt_object_max.value = 4
+pile = [Actor(f"Ammo{i}", (400.0 + 40 * i, 0.0, 0.0)) for i in range(3)]
+objects["WillowPickup"] = [gun_a, gun_b] + pile
+OS.kinds.clear(); OS.next_scan = 0; tick()
+names = sorted(k.split(".")[-1] for k in OS.sources)
+print("playing:", names)
+assert sum(n.startswith("Ammo") for n in names) == 1 and "GunA" in names and "GunB" in names, names
+# (all gear here: the pile, 80 cm across, is one sound; the guns 3-6 m away from it are their own)
+# the beacon's target doesn't also play its own sound, and the rest step back
+OS.focus_key = None; OS.duck = 1.0
+loud = OS._wanted(m.feats.s, m.feats.snapshot())
+OS.focus_key = pile[0]._path_name()
+assert all(f[1] != OS.focus_key for f in OS._wanted(m.feats.s, m.feats.snapshot()))
+OS.focus_key = None
+print("beacon target left out OK")
+# with the beacon on, object sounds step back (and the beacon is louder than any of them)
+from bl2_access import game as G2, object_sounds as OSM
+m.feats.pois = [F.POI("Ammo0", G2.weak(pile[0]), "Weapons and gear")]; m.feats.poi_index = 0; m.feats.beacon = True
+OS.next_scan = 0; tick()
+assert OS.duck == OSM.BEACON_DUCK and OS.focus_key == pile[0]._path_name(), (OS.duck, OS.focus_key)
+assert not any(k == OS.focus_key for k in OS.sources)
+m.feats.beacon = False; tick(); assert OS.duck == 1.0 and OS.focus_key is None
+assert 0.75 > 0.05 + 0.45   # quietest beacon (far away) vs loudest object sound (right beside you), before volumes
+print("ducking OK")
 m.on_disable()
 print("ALL ROUND 22 TESTS OK")

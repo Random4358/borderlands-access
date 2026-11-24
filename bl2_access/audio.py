@@ -37,10 +37,10 @@ SOUNDS: list[tuple[str, str, str]] = [
     ("gear", "Weapons and gear on the ground", "A bright two-note shimmer for guns, shields, grenade mods, class mods and relics lying nearby."),
     ("ammo", "Ammo and health on the ground", "A low, soft hum that gently swells."),
     ("money", "Money and eridium on the ground", "A high sparkle."),
-    ("loot", "Other loot on the ground", "A plain steady tone."),
+    ("loot", "Other loot on the ground", "A plain, steady high tone."),
     ("container", "Chests and containers", "A woody low buzz for chests, lockers and crates you haven't opened."),
-    ("interactive", "Doors, switches, vendors and travel", "A mid warble for doors, switches, vending machines and fast travel stations."),
-    ("quest", "Quest items", "A pulsing two-tone chord for quest items and mission objects."),
+    ("interactive", "Doors, switches, vendors and travel", "A low warble for doors, switches, vending machines and fast travel stations."),
+    ("quest", "Quest items", "A pulsing high two-tone chord for quest items and mission objects."),
     ("ui_move", "Menu move", "A short tick when you move the highlight in a menu."),
     ("ui_select", "Menu select", "Two rising notes when you pick something in a menu."),
     ("ui_back", "Menu back", "Two falling notes when you go back in a menu."),
@@ -436,21 +436,27 @@ CYCLE = 1 / SEG                 # 12.5 Hz: frequencies are multiples of this
 
 # kind -> list of segments, each (cycles per segment of the fundamental, amplitude);
 # plus the harmonic recipe [(harmonic, weight)].
+#
+# Each kind has its own part of the pitch range, and the middle (about 450 to 1000 Hz) is
+# kept clear for the beacon (700 Hz, rising and falling with height), so nothing sounds like
+# it or blurs into it:
+#   container 200 Hz, ammo 300, doors and switches 375-425    | beacon 500-1000 |
+#   quest 1100 + 1650, other loot 1300, gear 1750-2125, money 2500-3000
 LOOPS: dict[str, tuple[list[tuple[int, float]], list[tuple[int, float]]]] = {
     # weapons, shields, grenades, relics...: bright two-note shimmer
-    "gear": ([(72, 1.0), (72, 1.0), (90, 1.0), (90, 1.0)], [(1, 1.0), (3, 0.12)]),
+    "gear": ([(140, 1.0), (140, 1.0), (170, 1.0), (170, 1.0)], [(1, 1.0), (3, 0.08)]),
     # ammo and health: low, soft hum that swells
-    "ammo": ([(24, 1.0), (24, 0.85), (24, 0.7), (24, 0.85)], [(1, 1.0), (2, 0.35)]),
+    "ammo": ([(24, 1.0), (24, 0.85), (24, 0.7), (24, 0.85)], [(1, 1.0), (2, 0.1)]),
     # money and eridium: high sparkle
-    "money": ([(120, 0.7), (144, 0.7), (160, 0.7), (144, 0.7)], [(1, 1.0)]),
+    "money": ([(200, 0.6), (224, 0.6), (240, 0.6), (224, 0.6)], [(1, 1.0)]),
     # quest items: an open fifth that pulses (two tones at once)
-    "quest": ([(40, 1.0), (40, 1.0), (40, 0.55), (40, 0.55)], [(1, 1.0), (1.5, 0.8), (2, 0.2)]),
+    "quest": ([(88, 1.0), (88, 1.0), (88, 0.55), (88, 0.55)], [(1, 1.0), (1.5, 0.8)]),
     # chests, lockers, crates: woody low buzz
-    "container": ([(16, 1.0), (16, 0.65)], [(1, 1.0), (3, 0.33), (5, 0.2)]),
+    "container": ([(16, 1.0), (16, 0.65)], [(1, 1.0), (2, 0.3), (3, 0.08)]),
     # doors, switches, vendors, fast travel: mid warble
-    "interactive": ([(48, 0.9), (48, 0.9), (54, 0.9), (54, 0.9)], [(1, 1.0), (2, 0.25)]),
+    "interactive": ([(30, 0.9), (30, 0.9), (34, 0.9), (34, 0.9)], [(1, 1.0), (2, 0.1)]),
     # anything else lying on the ground
-    "loot": ([(36, 0.9)], [(1, 1.0), (2, 0.15)]),
+    "loot": ([(104, 0.8)], [(1, 1.0)]),
 }
 
 
@@ -465,7 +471,7 @@ def _loop_base(kind: str, step: int, behind: bool) -> tuple:
     cycles, amp = pattern[step % len(pattern)]
     if behind:  # muffled: fundamental only, a little quieter
         harmonics = [h for h in harmonics if h[0] == 1] or harmonics[:1]
-        amp *= 0.75
+        amp *= 0.6
     parts = []
     for h, w in harmonics:
         k = round(cycles * h)  # whole cycles per segment keeps the joins clean
