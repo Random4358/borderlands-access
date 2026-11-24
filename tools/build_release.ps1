@@ -15,7 +15,7 @@ foreach ($f in "Install.cmd", "install.ps1", "README.md", "CHANGELOG.md", "THIRD
 $src = Join-Path $root "bl2_access"
 Get-ChildItem -Path $src -Recurse -File | Where-Object {
     $_.FullName -notmatch "\\logs\\" -and $_.FullName -notmatch "\\maps\\" -and $_.FullName -notmatch "__pycache__" -and
-    $_.Name -notin @("tab_names.json", "python_path.txt")
+    $_.Name -notin @("tab_names.json", "python_path.txt", "game_sounds.json", "opened_flag.json")
 } | ForEach-Object {
     $rel = $_.FullName.Substring($src.Length).TrimStart("\")
     $target = Join-Path (Join-Path $stage "bl2_access") $rel
