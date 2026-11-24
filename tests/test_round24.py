@@ -267,5 +267,37 @@ gs.heard(pick, drop); assert gs.by_kind.get("ammo") is drop
 open(GS.STORE, "w").write('{"ammo": ["AkEvent", "Ake_Mon_Bullymong.Ak_Play_Mon_BMong_Rock_Impact"]}')
 gs2 = GS.GameSounds(); assert "ammo" not in gs2.saved        # the wrong one learned before is dropped
 print("drop sound learning OK")
+
+# --- the current objective: only the live stage of the mission (as in Blindsided), with markers as a fallback
+from bl2_access import quests as Q
+def odef(text, n=1): return NS(Class=NS(Name="MissionObjectiveDefinition"), ProgressMessage=text, ObjectiveCount=n)
+names = ["Retrieve Claptrap's eye", "Defend Claptrap", "Dig out Claptrap", "Defeat Knuckle Dragger",
+         "Defeat minions", "Find Sir Hammerlock", "Find new gear", "Loot gear", "Return to Claptrap"]
+objs = [odef(n) for n in names]
+progress = [1, 0, 0, 1, 1, 0, 0, 0, 0]          # earlier stages done; Defend Claptrap live; later ones not started
+stage = NS(Name="Set_DefendClaptrap", Class=NS(Name="MissionObjectiveSetDefinition"), ObjectiveDefinitions=[objs[1]],
+           MissionSummaryOverride="Keep the bullymongs off Claptrap while he digs through the snow.")
+blind = NS(Name="Ep2", Class=NS(Name="MissionDefinition"), MissionName="Blindsided", MissionSummary="",
+           MissionObjectives=objs)
+def rec2(**f):
+    r = NS(**f); r._type = NS(_properties=lambda: [NS(Name=k) for k in f]); return r
+_chain = [NS(Name=n) for n in ("WillowAIPawn", "Pawn", "Actor")]
+claptrap = NS(Name="Claptrap", Class=NS(Name="WillowAIPawn", _superfields=lambda: _chain, _properties=lambda: []), Location=NS(X=1500.0, Y=0.0, Z=0.0))
+entry = rec2(MissionDef=blind, Status=1, ObjectivesProgress=progress, ActiveObjectiveSet=stage)
+trk = NS(ActiveMission=blind, MissionList=[entry], MissionWaypoints=[rec2(Mission=blind, Objective=objs[1], WaypointActor=claptrap)])
+qpc = NS(WorldInfo=NS(GRI=NS(MissionTracker=trk)))
+info = Q.active_mission(qpc)
+print("mission:", info.spoken())
+assert info.spoken() == ("Mission: Blindsided. Now: Defend Claptrap. "
+                         "Keep the bullymongs off Claptrap while he digs through the snow"), info.spoken()
+# no stage in the entry: the game's marker decides, not the later objectives that haven't started
+entry2 = rec2(MissionDef=blind, Status=1, ObjectivesProgress=progress)
+trk.MissionList = [entry2]
+info = Q.active_mission(qpc)
+print("mission (markers):", info.spoken())
+assert info.spoken() == "Mission: Blindsided. Now: Defend Claptrap", info.spoken()
+assert "Find Sir Hammerlock" not in info.spoken()
+assert any(n.startswith("mission entry fields:") for n in notes)
+print("current objective OK")
 m.on_disable()
 print("ALL ROUND 24 TESTS OK")

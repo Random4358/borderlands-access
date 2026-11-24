@@ -57,6 +57,9 @@ class MissionInfo:
     objectives: list[Objective] = field(default_factory=list)
     turn_in_to: str = ""
     turn_in_text: str = ""
+    stage_known: bool = False        # objectives are just the current stage (objective set)
+    stage_summary: str = ""          # what this stage is about, when the game has it
+    marked: list[str] = field(default_factory=list)   # objectives the game has put a marker on
 
     @property
     def ready_to_turn_in(self) -> bool:
@@ -70,10 +73,18 @@ class MissionInfo:
             who = f" to {self.turn_in_to}" if self.turn_in_to else ""
             parts.append(f"Turn it in{who}")
         else:
-            todo = [o for o in self.objectives if not o.done] or self.objectives
+            todo = [o for o in self.objectives if not o.done]
+            if not self.stage_known:
+                # Without the current stage, the mission's list includes later stages that
+                # haven't started. The game's markers show what's live, so those come first.
+                marked = [o for o in todo if o.text in self.marked]
+                todo = marked or [Objective(t) for t in self.marked] or todo[:2]
             if todo:
-                parts.append("Objectives: " + ". ".join(o.spoken() for o in todo))
-            elif self.summary:
+                parts.append(("Now: " if self.stage_known or self.marked else "Objectives: ")
+                             + ". ".join(o.spoken() for o in todo))
+            if self.stage_summary:
+                parts.append(self.stage_summary)
+            elif not todo and self.summary:
                 parts.append(self.summary)
         return ". ".join(p.rstrip(". ") for p in parts if p)
 
@@ -163,6 +174,27 @@ def _progress_counts(entry: Any, n: int) -> list[int] | None:
     return None
 
 
+_entry_logged = False
+
+
+def _active_set(entry: Any) -> Any:
+    """The current objective set from a mission's progress entry: whichever field holds a
+    MissionObjectiveSetDefinition (the likely names first)."""
+    if entry is None:
+        return None
+    for name in ("ActiveObjectiveSet", "CurrentObjectiveSet", "ObjectiveSet"):
+        try:
+            v = getattr(entry, name)
+        except Exception:
+            continue
+        if v is not None and "ObjectiveSet" in game.class_name(v):
+            return v
+    for _n, v in _fields(entry):
+        if _is_obj(v) and game.class_name(v) == "MissionObjectiveSetDefinition":
+            return v
+    return None
+
+
 def _needed(obj_def: Any) -> int | None:
     for name in ("ObjectiveCount", "Count", "NumRequired", "RequiredCount"):
         try:
@@ -195,8 +227,18 @@ def active_mission(pc: Any) -> MissionInfo | None:
         pass
     defs = _objective_defs(mission)
     counts = _progress_counts(entry, len(defs))
+    # The current stage: the mission's progress entry points at its active objective set.
+    stage = _active_set(entry)
+    stage_defs = None
+    if stage is not None:
+        try:
+            stage_defs = list(stage.ObjectiveDefinitions)
+        except Exception:
+            stage_defs = None
     objectives = []
     for i, d in enumerate(defs):
+        if stage_defs is not None and not any(d == s for s in stage_defs):
+            continue
         text = _text(d, "ProgressMessage") or _text(d, "Description")
         if not text:
             continue
@@ -208,9 +250,20 @@ def active_mission(pc: Any) -> MissionInfo | None:
         objectives=objectives,
         turn_in_to=_text(mission, "MissionTurnInLocation"),
         turn_in_text=_text(mission, "TurnInDescription"),
+        stage_known=stage_defs is not None,
+        stage_summary=(_text(stage, "MissionSummaryOverride") or _text(stage, "MissionDescriptionOverride"))
+        if stage is not None else "",
+        marked=[w.label for w in waypoints(pc) if w.active and w.label != "Objective waypoint"],
     )
+    global _entry_logged
+    if not _entry_logged and entry is not None:
+        _entry_logged = True
+        trace.note("mission entry fields: " + ", ".join(
+            f"{n}={game.class_name(v) or type(v).__name__}" for n, v in _fields(entry)))
     trace.note(f"mission '{name}' status={status} objectives={len(defs)} "
-               f"progress={'yes' if counts else 'no'} turn_in='{info.turn_in_to}'")
+               f"progress={'yes' if counts else 'no'} turn_in='{info.turn_in_to}' "
+               f"stage={'none' if stage is None else getattr(stage, 'Name', '?')} "
+               f"now={[o.text for o in objectives if not o.done]} marked={info.marked}")
     return info
 
 
