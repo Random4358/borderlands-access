@@ -305,5 +305,35 @@ print("mission (stale marker):", info.spoken())
 assert info.spoken() == ("Mission: Blindsided. Objectives: Find Sir Hammerlock. Find new gear. Loot gear. "
                          "Return to Claptrap"), info.spoken()
 print("current objective OK")
+
+# --- opened containers drop off: the ones you open, then any showing the game's learned "opened" value
+import bl2_access.opened as OP
+from bl2_access.object_sounds import _still_usable
+OP.STORE = os.path.join(tempfile.mkdtemp(), "opened_flag.json")
+op = OP.Opened(); OP.opened = op
+class Chest:
+    def __init__(s, name, state="Closed"):
+        s.Name = name; s.State = NS(name=state); s.bIsUsable = True; s.LastRenderTime = 1.0; s.Loot = 3
+        props = [NS(Name=n) for n in ("State", "bIsUsable", "LastRenderTime", "Loot")]
+        s.Class = NS(Name="WillowInteractiveObject", _properties=lambda: props)
+    def _path_name(s): return "Glacial_P.TheWorld:PersistentLevel." + s.Name
+qpc2 = NS(WorldInfo=NS(GetMapName=lambda b: "Glacial_P"))
+c1, c2, c3, c4 = Chest("Chest_1"), Chest("Chest_2"), Chest("Chest_3", "Opened"), Chest("Chest_4")
+assert _still_usable(c1)
+op.tick(qpc2, 0.0)
+op.note_use(c1, 1.0)
+assert not _still_usable(c1)                         # the one you opened is gone at once
+c1.State = NS(name="Opened"); c1.LastRenderTime = 9.0; c1.Loot = 0
+op.tick(qpc2, 3.0)
+assert any("container opened: Chest_1" in n and "State" in n for n in notes), notes[-2:]
+assert op.flag is None                                 # one container isn't proof
+op.note_use(c2, 4.0); c2.State = NS(name="Opened"); op.tick(qpc2, 6.0)
+assert op.flag == ("State", "Opened"), op.flag
+assert not _still_usable(c3) and _still_usable(c4)    # opened before you came: gone; closed: stays
+assert os.path.exists(OP.STORE) and OP.Opened().flag == ("State", "Opened")   # remembered next time
+# a new level: what you opened is forgotten (the game refills chests), the learned value stays
+op.tick(NS(WorldInfo=NS(GetMapName=lambda b: "Sanctuary_P")), 7.0)
+assert not op.used and op.flag
+print("opened containers OK")
 m.on_disable()
 print("ALL ROUND 24 TESTS OK")

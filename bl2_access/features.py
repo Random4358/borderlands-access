@@ -362,6 +362,12 @@ class Features:
         if fighting:
             duck *= COMBAT_DUCK
         objects.duck, objects.focus_key = duck, focus
+        try:
+            from .opened import opened
+
+            opened.tick(snap.pc, now)
+        except Exception:
+            pass
         from .navigation import beacon as _nb
 
         _nb.duck = BEACON_COMBAT if fighting else 1.0
@@ -546,6 +552,26 @@ class Features:
             _d, key, name, rel = beside
             self.beside_key = key
             speech.say(f"{name} within reach, {game.clock(rel.rel_yaw)}. Turn to it", interrupt=False)
+
+    def note_use_press(self) -> None:
+        """Use was pressed: if the prompt had just named a container in reach, it's being opened."""
+        key = self.use_key
+        if key is None:
+            return
+        snap = self.snapshot()
+        if snap is None:
+            return
+        for ptr, k, verb, _name in self.use_candidates:
+            if k != key or verb != "open":
+                continue
+            actor = game.deref(ptr)
+            pos = game.location(actor) if actor is not None else None
+            body = game.location(snap.pawn) or snap.eye
+            if pos is not None and math.hypot(pos[0] - body[0], pos[1] - body[1]) <= self.USE_RANGE + 40:
+                from .opened import opened
+
+                opened.note_use(actor, time.perf_counter())
+            return
 
     def use_announced(self) -> bool:
         """Use the object the interaction prompt announced, if it's still within reach.
@@ -852,8 +878,12 @@ class Features:
                 found.append(POI(game.display_name(p), game.weak(p), "People"))
             elif not game.is_hostile(snap.pawn, p, False):
                 found.append(POI(game.display_name(p), game.weak(p), "People"))
+        from .object_sounds import _still_usable
+
         for a in game.world_actors(["WillowInteractiveObject", "WillowVendingMachineBase"]):
             cat, name = categorize_object(a)
+            if cat == "Containers" and not _still_usable(a):
+                continue   # already opened
             if cat:
                 found.append(POI(name, game.weak(a), cat))
         for a in game.world_actors(["WillowPickup"]):

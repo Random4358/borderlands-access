@@ -299,6 +299,11 @@ class InputState:
 
         # Use assist: Use pressed while the mod has announced something in reach. The game only
         # uses what your crosshair is on, so the mod uses the announced object itself.
+        if key in USE_KEYS and pressed:
+            try:
+                features.note_use_press()   # a container being opened drops off the scanner
+            except Exception:
+                pass
         if key in USE_KEYS and features.s.use_assist:
             if pressed and features.use_announced():
                 self.swallowed.add(key)

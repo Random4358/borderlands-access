@@ -94,8 +94,16 @@ class Source:
 
 
 def _still_usable(obj: Any) -> bool:
-    """False for containers that have been opened, where the game says so plainly. (Calling the
-    game's usability functions without a player isn't reliable, so they aren't used.)"""
+    """False for containers that have been opened: ones you opened (opened.py), ones showing the
+    game's learned "opened" value, or where the game says so plainly. (Calling the game's
+    usability functions without a player isn't reliable, so they aren't used.)"""
+    try:
+        from .opened import opened
+
+        if opened.is_opened(obj):
+            return False
+    except Exception:
+        pass
     for prop in ("bIsUsable", "bCanBeUsed", "bUsable"):
         try:
             return bool(getattr(obj, prop))
