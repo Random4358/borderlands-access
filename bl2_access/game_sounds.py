@@ -25,7 +25,7 @@ MOD_DIR = os.path.dirname(os.path.abspath(__file__))
 STORE = os.path.join(MOD_DIR, "game_sounds.json")
 SOUND_HOOKS = ["Engine.Actor:PlayAkEvent", "Engine.Actor:PlaySound"]
 DROP_WORDS = ("drop", "land", "impact", "bounce", "spawn", "loot", "rarity", "legendary")
-NEAR = 150.0   # uu: a sound played this close to an item counts as the item's
+NOT_DROP = ("_mon_", "mon_", "weapon_fire", "_fire", "footstep", "vo_", "dialog")
 
 _ID = "bl2_access_game_sounds"
 
@@ -113,19 +113,14 @@ class GameSounds:
         if sound is None:
             return
         sname = _name(sound)
-        key = None
-        if "Pickup" in game.class_name(source):
-            key = _path(source)
-        else:
-            pos = game.location(source)
-            if pos is not None:
-                best = None
-                for k, (q, _kind) in self.items.items():
-                    d = math.dist(pos, q)
-                    if d < NEAR and (best is None or d < best[0]):
-                        best = (d, k)
-                key = best[1] if best else None
-        if key is None or key not in self.items:
+        # Only a sound the item plays itself. (Sounds played right next to an item were used
+        # at first, and a Bullymong's rock landing by some ammo became "the ammo sound".)
+        if "Pickup" not in game.class_name(source):
+            return
+        key = _path(source)
+        if key not in self.items:
+            return
+        if any(w in sname.lower() for w in NOT_DROP):
             return
         kind = self.items[key][1]
         dropish = any(w in sname.lower() for w in DROP_WORDS)
@@ -192,7 +187,8 @@ class GameSounds:
         try:
             with open(STORE, encoding="utf-8") as f:
                 data = json.load(f)
-            self.saved = {str(k): [str(v[0]), str(v[1])] for k, v in data.items()}
+            self.saved = {str(k): [str(v[0]), str(v[1])] for k, v in data.items()
+                          if not any(w in str(v[1]).lower() for w in NOT_DROP)}
         except Exception:
             self.saved = {}
 

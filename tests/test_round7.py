@@ -157,12 +157,12 @@ print("items OK")
 
 # --- skills: name, points, the description the game generated
 ward = NS(Class=cls("SkillDefinition"), Name="Ward", _path_name=lambda: "S.Ward", SkillName="Ward", MaxGrade=5,
-          SkillDescription="fallback")
+          SkillDescription="Your shield holds more")
 accel = NS(Class=cls("SkillDefinition"), Name="Accelerate", _path_name=lambda: "S.Acc", SkillName="Accelerate",
            MaxGrade=5, SkillDescription="Increases [skill]gun damage[-skill].")
 run("WillowGame.SkillTreeGFxObject:GetSkillDescriptionForGrade", Type.POST, None,
     ret="Increases your <font color='#ff0'>shield capacity</font>.", SkillDef=ward, Grade=1)
-print("skill:", said[-1][0]); assert said[-1][0] == "Ward, 3 of 5 points. Increases your shield capacity."
+print("skill:", said[-1][0]); assert said[-1][0] == "Ward, 3 of 5 points. Your shield holds more. Increases your shield capacity.", said[-1]
 n = len(said)
 run("WillowGame.SkillTreeGFxObject:GetSkillDescriptionForGrade", Type.POST, None, ret="x", SkillDef=ward, Grade=2)
 assert len(said) == n                                      # same skill, same moment: once

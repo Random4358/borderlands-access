@@ -58,6 +58,13 @@ def _clean(s: Any) -> str:
     return re.sub(r"\s+([.,;:!?])", r"\1", t)
 
 
+def _skill_text(skill: Any, field: str) -> str:
+    try:
+        return str(getattr(skill, field) or "")
+    except Exception:
+        return ""
+
+
 def tab_label(word: str) -> str:
     key = word.lower()
     return TAB_WORDS.get(key) or game.pretty(word)
@@ -157,9 +164,30 @@ class StatusReader:
         if word != self.tab_word:
             self.tab_word = word
             self.last_item = ""
-            self._say(tab_label(word))
+            self._say(self._tab_text(word))
         if num is not None:
             self.tab_num = num
+
+    def _tab_text(self, word: str) -> str:
+        """The tab's name; for the skill tree, also how many points you have to spend."""
+        text = tab_label(word)
+        if word.lower().startswith("skill"):
+            points = self._points_to_spend()
+            if points is not None:
+                text += f". {points} skill point{'' if points == 1 else 's'} to spend"
+        return text
+
+    @staticmethod
+    def _points_to_spend() -> int | None:
+        pc = game.pc()
+        for get in (lambda: pc.PlayerReplicationInfo.GeneralSkillPoints,
+                    lambda: pc.PlayerSkillTree.GetSkillPointsAvailable()):
+            try:
+                v = get()
+                return int(v[0] if isinstance(v, tuple) else v)
+            except Exception:
+                continue
+        return None
 
     @staticmethod
     def _current_tab(movie: Any) -> int | None:
@@ -173,7 +201,12 @@ class StatusReader:
 
         movie = panels.focus_movie()
         if movie is None or game.class_name(movie) != STATUS_MOVIE:
-            if self.tab_word or self.tab_num is not None:
+            # Inside the skill tree (and other parts of the menu) something else has the focus;
+            # that isn't leaving the menu. Only forget the tab once no menu is open, so the tab
+            # name isn't said again on every button press.
+            from .controls import menus
+
+            if not menus.world_sounds_paused() and (self.tab_word or self.tab_num is not None):
                 self.tab_word, self.tab_num, self.last_item = "", None, ""
             return
         num = self._current_tab(movie)
@@ -184,7 +217,7 @@ class StatusReader:
         if word and word != self.tab_word:
             self.tab_word = word
             self.last_item = ""
-            self._say(tab_label(word))
+            self._say(self._tab_text(word))
 
     # ------------------------------------------------------------ skills
     def on_skill(self, skill: Any, desc: Any) -> None:
@@ -203,22 +236,66 @@ class StatusReader:
         except Exception:
             top = 0
         if grade is not None and top > 0:
-            parts.append(f"{grade} of {top} points")
+            parts.append(f"{grade} of {top} point{'' if top == 1 else 's'}")
         elif top > 0:
-            parts.append(f"up to {top} points")
-        text = _clean(desc) or _clean(getattr(skill, "SkillDescription", ""))
-        spoken = ", ".join(parts) + (f". {text}" if text else "")
+            parts.append(f"{top} point{'' if top == 1 else 's'} maximum")
+        # What the skill does (its description), then the numbers for its current level
+        # (what the game shows under it). Either may be missing.
+        about = _clean(_skill_text(skill, "SkillDescription"))
+        numbers = _clean(desc)
+        if numbers and about and numbers in about:
+            numbers = ""
+        if about and about in numbers:
+            about = ""
+        self._log_skill(skill, about, numbers, grade)
+        spoken = ", ".join(parts) + "".join(f". {t.rstrip('.')}" for t in (about, numbers) if t) + "."
         self._say(spoken)
+
+    def _log_skill(self, skill: Any, about: str, numbers: str, grade: int | None) -> None:
+        n = getattr(self, "skill_logs", 0)
+        if n >= 3:
+            return
+        self.skill_logs = n + 1
+        from . import trace
+
+        trace.note(f"skill: {getattr(skill, 'Name', '?')}: points {grade}, description {about[:120]!r}, "
+                   f"numbers {numbers[:120]!r}")
 
     @staticmethod
     def _skill_grade(skill: Any) -> int | None:
+        """Points you have in the skill. Read from the skill tree's list of skill states first
+        (plain values, which always work), then by asking the game."""
         pc = game.pc()
         if pc is None:
             return None
         for holder in ("PlayerSkillTree", "SkillTree"):
             try:
                 tree = getattr(pc, holder)
-                return int(tree.GetSkillGrade(skill))
+            except Exception:
+                continue
+            for list_name in ("Skills", "SkillStates", "SkillList"):
+                try:
+                    states = list(getattr(tree, list_name))
+                except Exception:
+                    continue
+                for st in states:
+                    d = None
+                    for f in ("Definition", "SkillDefinition", "Skill"):
+                        try:
+                            d = getattr(st, f)
+                            break
+                        except Exception:
+                            continue
+                    if d is None or not (d == skill or _ident(d) == _ident(skill)):
+                        continue
+                    for f in ("Grade", "SkillGrade", "CurrentGrade"):
+                        try:
+                            return int(getattr(st, f))
+                        except Exception:
+                            continue
+            try:
+                v = tree.GetSkillGrade(skill)
+                return int(v[0] if isinstance(v, tuple) else v)
             except Exception:
                 continue
         return None

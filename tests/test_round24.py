@@ -217,5 +217,55 @@ assert any("couldn't turn the view" in n for n in notes)
 # wrap-around: 65535 and -1 are the same direction
 pc.Rotation = NS(Pitch=0, Yaw=65535, Roll=0); assert G._rotation_is(pc, 0, -1)
 print("turning the view OK")
+
+# --- skill tree: "Skills" once (not on every button press), points to spend, points per skill
+from bl2_access.status_reader import status as SR
+from bl2_access import controls as C
+ward = NS(Class=NS(Name="SkillDefinition"), Name="Ward", _path_name=lambda: "S.Ward", SkillName="Ward", MaxGrade=5,
+          SkillDescription="Your shield holds more.")
+tree = NS(Skills=[NS(Definition=NS(Name="Other", _path_name=lambda: "S.Other"), Grade=1),
+                  NS(Definition=NS(Name="Ward", _path_name=lambda: "S.Ward"), Grade=2)])
+status_movie = NS(Name="StatusMenuExGFxMovie_1", Class=NS(Name="StatusMenuExGFxMovie"), GetCurrentTab=lambda: 4,
+                  _path_name=lambda: "StatusMenuExGFxMovie_1")
+skill_movie = NS(Name="SkillTreeGFxObject_0", Class=NS(Name="SkillTreeGFxObject"), _path_name=lambda: "SkillTree")
+focus = {"m": status_movie}
+world.pc = NS(Pawn=None, PlayerSkillTree=tree, PlayerReplicationInfo=NS(GeneralSkillPoints=3),
+              GFxUIManager=NS(FindFocusMovie=lambda: focus["m"]), WorldInfo=NS(Pauser=None), Rotation=NS(Pitch=0, Yaw=0, Roll=0))
+C.menus.opened(status_movie)
+SR.tab_word, SR.tab_num = "", None
+said.clear()
+SR.on_tab_input(status_movie, "Skills")
+assert said and said[-1][0] == "Skills. 3 skill points to spend", said
+focus["m"] = skill_movie                        # inside the tree, something else has the focus
+for _ in range(5):
+    SR._poll_tab()
+    SR.on_tab_input(status_movie, "Skills")     # every button press runs the tab's handler
+assert [s for s, _i in said].count("Skills. 3 skill points to spend") == 1, said
+said.clear(); SR.last_skill = ""
+SR.on_skill(ward, "Shield Capacity: +5%")
+print("skill:", said[-1][0])
+assert said[-1][0] == "Ward, 2 of 5 points. Your shield holds more. Shield Capacity: +5%.", said[-1]
+one = NS(Class=NS(Name="SkillDefinition"), Name="Deathtrap", _path_name=lambda: "S.DT", SkillName="Summon Deathtrap",
+         MaxGrade=1, SkillDescription="")
+SR.last_skill = ""; SR.on_skill(one, "Cooldown: 60 seconds")
+assert said[-1][0] == "Summon Deathtrap, 1 point maximum. Cooldown: 60 seconds.", said[-1]
+C.menus.closed(status_movie); focus["m"] = None
+print("skill tree reading OK")
+
+# --- drop sounds: only what the item itself plays, never a creature's sound
+from bl2_access import game_sounds as GS
+GS.STORE = os.path.join(tempfile.mkdtemp(), "gs.json")
+gs = GS.GameSounds()
+gs.note_item("Map.TheWorld:PersistentLevel.WillowPickup_1", (0.0, 0.0, 0.0), "ammo")
+pick = NS(Class=NS(Name="WillowPickup"), _path_name=lambda: "Map.TheWorld:PersistentLevel.WillowPickup_1")
+rock = NS(Class=NS(Name="AkEvent"), Name="Ak_Play_Mon_BMong_Rock_Impact", _path_name=lambda: "Ake.Rock")
+bully = NS(Class=NS(Name="WillowAIPawn"), Location=NS(X=10.0, Y=0.0, Z=0.0))
+gs.heard(bully, rock); gs.heard(pick, rock)
+assert not gs.by_kind, gs.by_kind
+drop = NS(Class=NS(Name="AkEvent"), Name="Ak_Play_Item_Ammo_Drop", _path_name=lambda: "Ake.Drop")
+gs.heard(pick, drop); assert gs.by_kind.get("ammo") is drop
+open(GS.STORE, "w").write('{"ammo": ["AkEvent", "Ake_Mon_Bullymong.Ak_Play_Mon_BMong_Rock_Impact"]}')
+gs2 = GS.GameSounds(); assert "ammo" not in gs2.saved        # the wrong one learned before is dropped
+print("drop sound learning OK")
 m.on_disable()
 print("ALL ROUND 24 TESTS OK")
