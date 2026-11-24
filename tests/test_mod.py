@@ -10,6 +10,7 @@ class EInputEvent(enum.IntEnum):
     IE_Pressed = 0; IE_Released = 1; IE_Repeat = 2
 
 class _Opt:
+    __hash__ = None   # like the real mod manager's options (dataclasses): can't be dict keys
     def __init__(self, ident, value=None, *a, **k): self.identifier = ident; self.value = value; self.k = k
 
 mb = types.ModuleType("mods_base")

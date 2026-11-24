@@ -8,6 +8,7 @@ class EInputEvent(enum.IntEnum):
     IE_Pressed = 0; IE_Released = 1
 
 class _Opt:
+    __hash__ = None   # like the real mod manager's options (dataclasses): can't be dict keys
     def __init__(self, ident, value=None, *a, description="", display_name=None, **k):
         self.identifier = ident; self.display_name = display_name or ident; self.description = description
         self.value = value; self.default_value = value; self.is_hidden = False
