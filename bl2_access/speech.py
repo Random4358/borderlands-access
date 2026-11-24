@@ -341,6 +341,7 @@ class Speech:
         if not text:
             return
         self.last_text = text
+        self.said_count = getattr(self, "said_count", 0) + 1   # lets the menu move sound wait for a real move
         _log(f"SAY: {text}")
         if not self.enabled or self.backend is None:
             return

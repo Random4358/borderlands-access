@@ -168,7 +168,7 @@ for d in (0.0, 0.1, -0.9, -0.95, 0.0):
     call("GFxMoviePlayer", "FilterAxisInput", gfx, Type.PRE, ControllerId=0, Key="XboxTypeS_LeftY", Delta=d, DeltaTime=0.016)
 # online pop-up is announced on open
 m.controls.menus.opened(NS(Class=NS(Name="OnlineMessageGFxMovie"), Name="OnlineMessageGFxMovie_0", _path_name=lambda: "olm"))
-print("popup:", said[-1]); assert said[-1].startswith("Online status message")
+print("popup:", said[-1]); assert said[-1].startswith("Message from the game. Press A or Enter to accept or continue, B or Escape to go back")
 print("ALL REAL-TRACE TESTS OK")
 # ---- regression 4: option help text given as '$Key' references (real game: MusicVolumeDesc)
 said.clear(); time.sleep(0.35)
@@ -254,7 +254,7 @@ def standin(profile):
 def select(i):
     call("CharacterSelectionReduxGFxMovie", "SetSelectedCharacterIndex", csm, Type.PRE, PlayerIndex=0, NewSelectedIndex=i)
 standin("Profile_Soldier")                     # screen opens on the starting character
-print("opening:", said[-1]); assert said[-1] == "Axton, the Commando"
+print("opening:", said[-2:]); assert said[-2] == "Axton, the Commando" and said[-1].startswith("Move left or right") and "Press A or Enter to choose" in said[-1]
 # real sequence from the trace: 2 Siren, 3 Mercenary, 2, 3, 2, 5 Lilac, 4 Mechromancer
 for idx, prof in [(2, "Profile_Siren"), (3, "Profile_Mercenary")]:
     select(idx); standin(prof)

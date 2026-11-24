@@ -26,7 +26,7 @@ __version__ = "0.2.0"
 
 # ----------------------------------------------------------------------------- options
 
-opt_volume = SliderOption("Cue volume", 80, 0, 100, description="Volume of all accessibility sounds.")
+opt_volume = SliderOption("Cue volume", 45, 0, 100, description="Volume of all accessibility sounds.")
 opt_speech = DropdownOption(
     "Speech output", "Prism (uses NVDA when running)", ["Prism (uses NVDA when running)", "NVDA direct"],
     description="How text is sent to your screen reader. Changes apply when the mod is re-enabled.",
@@ -77,7 +77,7 @@ opt_wall_dist = SliderOption("Wall detection distance (metres)", 3, 1, 8)
 opt_npc_sounds = BoolOption("NPC sounds", True, description="A soft chime for friendly characters nearby: panned to where they are, faster when closer, muffled when behind you.")
 opt_npc_range = SliderOption("NPC sound range (metres)", 25, 5, 60)
 opt_npc_max = SliderOption("NPC sounds max characters", 2, 1, 5)
-opt_use_assist = BoolOption("Use assist", True, description="When an interaction prompt has just told you about something in reach, pressing Use (X, or E on the keyboard) uses that thing even if your crosshair isn't exactly on it.")
+opt_use_assist = BoolOption("Use assist", True, description="When an interaction prompt has just told you about something in reach, pressing Use (X, or E on the keyboard) uses that thing even if your crosshair isn't exactly on it. The same goes for a character the Talk to prompt has just named: Use talks to them, which is also how you hand in missions.")
 opt_interact = BoolOption("Interaction prompts", True, description="When you're close to something you can use and facing it, a soft double tick, then its name and the button to press, for example: Red chest. Press X to open. Uses keyboard key names if you last used the keyboard.")
 opt_lock_nav = BoolOption("Lock-on navigation", False, description="When on, hold the modifier and click the right stick (or press the apostrophe key) to turn and face the way to your objective: the beacon's target if you've picked one, otherwise the nearest marker of your tracked mission. It follows the game's walking route when there is one. When off, that button says your heading.")
 opt_npc_talk = BoolOption("Say who you can talk to", True, description="Says 'Talk to' and the character's name when you're next to them and facing them.")
@@ -342,6 +342,12 @@ def on_disable() -> None:
         from .status_reader import status
 
         status.unregister()
+    except Exception:
+        pass
+    try:
+        from .screen_text import screen_text
+
+        screen_text.unregister()
     except Exception:
         pass
     trace.unregister_commands()

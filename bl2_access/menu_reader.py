@@ -299,6 +299,10 @@ class ListState:
         return None
 
 
+CHOOSE_HINT = ("Move left or right, or up or down, to hear the other characters. "
+               "Press A or Enter to choose the one you're on, B or Escape to go back")
+
+
 class MenuReader:
     REPOPULATE_GAP = 0.3   # an add this long after the previous one starts a fresh list
 
@@ -732,6 +736,8 @@ class MenuReader:
                     details = self._character_details(profile)
                     if details:
                         speech.say(details, interrupt=False)
+                # How to choose wasn't said anywhere (a tester had to guess).
+                speech.say(CHOOSE_HINT, interrupt=False)
             return
         self.char_names[self.char_index] = name
         self.char_profiles[self.char_index] = profile

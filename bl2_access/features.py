@@ -18,7 +18,7 @@ from .speech import speech
 class Settings:
     """Plain values copied from the mod options each tick (keeps this module SDK-free)."""
 
-    volume: float = 0.8
+    volume: float = 0.45
     radar: bool = True
     radar_range: float = 4000.0
     radar_max: int = 3
@@ -573,17 +573,52 @@ class Features:
                 opened.note_use(actor, time.perf_counter())
             return
 
+    def _talk_target(self, snap: Snapshot) -> tuple[Any, str] | None:
+        """(actor, name) of the character the "Talk to" prompt named, if still in reach and
+        nearer than the object the interaction prompt named."""
+        if self.talk_key is None or not self.s.npc_talk:
+            return None
+        body = game.location(snap.pawn) or snap.eye
+        person = next((n for n in self.npcs if n.key == self.talk_key), None)
+        actor = person.actor if person is not None else None
+        pos = game.location(actor) if actor is not None else None
+        if pos is None:
+            return None
+        flat = math.hypot(pos[0] - body[0], pos[1] - body[1])
+        if flat > self.TALK_RANGE + 50:
+            return None
+        if self.use_key is not None:
+            for ptr, k, _verb, _name in self.use_candidates:
+                if k == self.use_key:
+                    obj = game.deref(ptr)
+                    q = game.location(obj) if obj is not None else None
+                    if q is not None and math.hypot(q[0] - body[0], q[1] - body[1]) < flat:
+                        return None
+        return actor, game.display_name(actor)
+
     def use_announced(self) -> bool:
         """Use the object the interaction prompt announced, if it's still within reach.
         True if the game accepted it (the button press is then kept from the game, so the
         object isn't used twice)."""
         from . import trace
 
-        key = self.use_key
-        if key is None or not self.s.interact_prompts:
-            return False
         snap = self.snapshot()
         if snap is None:
+            return False
+        # A character the "Talk to" prompt just named, and nearer than any announced object:
+        # talk to them (that's also how missions are handed in, e.g. to Claptrap).
+        person = self._talk_target(snap)
+        if person is not None:
+            actor, name = person
+            try:
+                result = actor.UsedBy(snap.pawn)
+            except Exception as e:  # noqa: BLE001
+                trace.note(f"use assist: talking to {name}: UsedBy failed: {type(e).__name__}: {e}")
+                return False
+            trace.note(f"use assist: talk to {name} ({game.class_name(actor)}): UsedBy returned {result!r}")
+            return result is None or bool(result[0] if isinstance(result, tuple) else result)
+        key = self.use_key
+        if key is None or not self.s.interact_prompts:
             return False
         for ptr, k, verb, name in self.use_candidates:
             if k != key:

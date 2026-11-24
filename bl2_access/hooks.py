@@ -105,6 +105,12 @@ def on_tick(obj: Any, args: Any, ret: Any, func: Any) -> None:
             status.tick()
         except Exception:
             _report("status tick")
+        try:
+            from .screen_text import screen_text
+
+            screen_text.tick()
+        except Exception:
+            _report("screen text tick")
         features.tick()
     except Exception:
         _report("tick")

@@ -127,12 +127,20 @@ print("silent in cinematics and loading screens OK")
 # --- real menus still click: a menu we know, or a menu-type screen with focus
 main = NS(Name="FrontendGFxMovie_0", Class=cls("FrontendGFxMovie", ["GFxMoviePlayer"])); main._path_name = lambda: "FrontendGFxMovie_0"
 m.controls.menus.opened(main); focus.movie = main
+def read_entry():   # the menu reader reads the newly highlighted entry
+    m.speaker.said_count = getattr(m.speaker, "said_count", 0) + 1
 played.clear(); time.sleep(0.03); gfx("XboxTypeS_DPad_Down", main)
-assert "ui" in played, played
+assert "ui" not in played                                   # not yet: has the highlight moved?
+read_entry(); tick()
+assert "ui" in played, played                               # it moved: click
+# at the end of the list nothing new is read: no click (tester's report)
+played.clear(); time.sleep(0.03); gfx("XboxTypeS_DPad_Down", main)
+time.sleep(m.controls.state.MOVE_WAIT + 0.05); tick(); read_entry(); tick()
+assert "ui" not in played, played
 m.controls.menus.closed(main)
 pause = NS(Name="PauseGFxMovie_0", Class=cls("SomePauseMenuGFxMovie")); focus.movie = pause
-played.clear(); time.sleep(0.03); gfx("XboxTypeS_DPad_Down", pause); assert "ui" in played
-m.opt_menu_sounds.value = False; tick(); played.clear(); time.sleep(0.03); gfx("XboxTypeS_DPad_Up", pause)
+played.clear(); time.sleep(0.03); gfx("XboxTypeS_DPad_Down", pause); read_entry(); tick(); assert "ui" in played
+m.opt_menu_sounds.value = False; tick(); played.clear(); time.sleep(0.03); gfx("XboxTypeS_DPad_Up", pause); read_entry(); tick()
 assert "ui" not in played                                    # the option still turns them off
 m.opt_menu_sounds.value = True; tick(); focus.movie = None
 print("menu sounds in real menus OK")
@@ -250,6 +258,14 @@ orig = G.is_friendly_npc; G.is_friendly_npc = lambda me_, p: p is doc
 step()
 G.is_friendly_npc = orig
 print("npc:", said[-1][0]); assert said[-1][0] == "Talk to Doc Mercy. Press X", said[-1]
+# Use talks to the character just named, wherever your crosshair is (how missions are handed in)
+talked = []
+doc.UsedBy = lambda user: talked.append(user) or True
+G.is_friendly_npc = lambda me_, p: p is doc
+r = key("XboxTypes_X"); key("XboxTypes_X", False)
+G.is_friendly_npc = orig
+assert talked == [me] and r is not None and r is not False, (talked, r)
+print("talk with use assist OK")
 # the glossary lists the new prompt sound
 assert any(k == "ui_prompt" for k, _n, _d in A.SOUNDS) and A.preview("ui_prompt")
 m.on_disable()

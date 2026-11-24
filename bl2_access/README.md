@@ -121,14 +121,14 @@ muffled when the object is behind you, so you can turn until it's centred and wa
 - **Shields, grenade mods, class mods and relics**: a steady hollow tone, rising with rarity the same way.
 - **Ammo**: a low, steady hum.
 - **Health**: a soft, warm two-note chord.
-- **Money and eridium**: a soft, very high steady tone.
+- **Money and eridium**: a soft steady tone, a little higher than the weapons.
 - **Other loot on the ground**: a soft, low steady tone.
 - **Chests, lockers and other containers**: a woody low throb. It stops once you've opened the container, if the game
   reports that.
 - **Doors, switches, vendors and fast travel stations**: a steady hollow tone.
-- **Quest items and mission objects**: a steady two-note chord. These always get a sound before anything else.
+- **Quest items and mission objects**: a steady, low two-note chord. These always get a sound before anything else.
 
-Nothing else uses the middle of the pitch range, which is kept for the beacon, and the beacon is always the loudest
+No object sound goes above about 1.6 kHz, so nothing is shrill. Nothing else uses the middle of the pitch range, which is kept for the beacon, and the beacon is always the loudest
 sound. Object sounds get quieter while the beacon or enemy tones are playing, the beacon's own target doesn't also play
 its object sound, and several things of the same kind side by side play as one.
 

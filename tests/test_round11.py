@@ -158,9 +158,9 @@ assert group_names[0] == "General" and group_names[-1] == "Sound glossary and vo
 # --- moving and changing
 assert key("XboxTypeS_DPad_Down") == (Block, True)           # swallowed: the game doesn't see it
 assert said[-1][0].startswith("Speech output,") and said[-1][0].endswith("2 of 7"), said[-1]
-key("XboxTypeS_DPad_Up"); assert said[-1][0].startswith("Cue volume, 80 percent"), said[-1]
-key("XboxTypeS_DPad_Right"); assert said[-1][0] == "81 percent" and m.opt_volume.value == 81
-key("XboxTypeS_DPad_Left"); assert m.opt_volume.value == 80
+key("XboxTypeS_DPad_Up"); assert said[-1][0].startswith("Cue volume, 45 percent"), said[-1]
+key("XboxTypeS_DPad_Right"); assert said[-1][0] == "46 percent" and m.opt_volume.value == 46
+key("XboxTypeS_DPad_Left"); assert m.opt_volume.value == 45
 key("XboxTypeS_DPad_Up"); assert said[-1][0].startswith("Diagnostic") or said[-1][0].startswith("Trace"), said[-1]  # wraps to the end
 # dropdowns cycle; Y describes
 key("XboxTypeS_RightShoulder")                               # Controller and menus

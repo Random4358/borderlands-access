@@ -126,7 +126,9 @@ f.toggle_beacon(); assert not f.beacon and "marked a location" in said[-1][0]
 # ready to turn in
 entry.Status = 3; entry.ObjectivesProgress = [5, 1]
 f.current_mission(); print("turn in:", said[-1][0])
-assert said[-1][0] == "Mission: Example Mission. Ready to turn in. Turn it in to Doc Mercy"
+assert said[-1][0] == ("Mission: Example Mission. Ready to turn in. Turn it in to Doc Mercy. Find Doc Mercy in the "
+                       "scanner's People category or the mission contact entry, go right up to them, and press Use "
+                       "when you hear Talk to Doc Mercy"), said[-1]
 f.cycle_category(1); f.cycle_category(-1)                  # round trip back to Quest objectives
 f.cycle_poi(1); assert said[-1][0].startswith("Turn in to Doc Mercy,"), said[-1]
 # unknown objective layout: falls back to any array of objective definitions + any int array

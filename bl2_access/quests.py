@@ -72,6 +72,10 @@ class MissionInfo:
         if self.ready_to_turn_in:
             who = f" to {self.turn_in_to}" if self.turn_in_to else ""
             parts.append(f"Turn it in{who}")
+            if self.turn_in_to:
+                # How, since it isn't obvious (a tester couldn't hand in My First Gun).
+                parts.append(f"Find {self.turn_in_to} in the scanner's People category or the mission contact entry, "
+                             f"go right up to them, and press Use when you hear Talk to {self.turn_in_to}")
         else:
             todo = [o for o in self.objectives if not o.done]
             if not self.stage_known:

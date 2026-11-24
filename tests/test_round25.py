@@ -213,5 +213,29 @@ print(f"route across it: {len(path)} points, reached={done}, {took * 1000:.0f} m
       f"{math.dist(g.pos[start][:2], g.pos[far][:2]) / 100:.0f} m apart, group of {len(group)}")
 assert done and len(path) > 20 and took < 0.5
 print("bundled paths OK")
+
+# --- screens without a reader of their own (licence, privacy policy): their text is read, and how to leave
+import bl2_access.status_reader as SRm
+from bl2_access.screen_text import screen_text, is_unknown
+assert is_unknown("WillowGFxMovieLegal") and is_unknown("OnlineMessageGFxMovie")
+assert not is_unknown("WillowHUDGFxMovie") and not is_unknown("FrontendGFxMovie")
+param = NS(Class=NS(Name="StrProperty"), Name="BodyText", PropertyFlags=0x80, Next=None)
+fn = NS(Name="SetBodyText", Children=param)
+orig_fns = SRm._functions
+SRm._functions = lambda cls: iter([(f"WillowGame.{cls}:SetBodyText", "SetBodyText", fn)])
+legal = NS(Name="WillowGFxMovieLegal_0", Class=NS(Name="WillowGFxMovieLegal"), _path_name=lambda: "legal")
+said.clear(); notes.clear()
+m.controls.menus.opened(legal)
+SRm._functions = orig_fns
+print("legal screen:", said[-1][0])
+assert said[-1][0].startswith("Legal screen. Press A or Enter to accept or continue, B or Escape to go back"), said
+assert any(n.startswith("screen text: WillowGFxMovieLegal: reading text from 1 functions: SetBodyText(BodyText)") for n in notes), notes
+cb = hooked[("WillowGame.WillowGFxMovieLegal:SetBodyText", Type.PRE)]
+cb(legal, NS(BodyText="<p>By playing you agree to the <b>Terms of Service</b>.</p>"), None, None)
+cb(legal, NS(BodyText="By playing you agree to the Terms of Service."), None, None)   # same text again: once
+screen_text.last_add -= 1; screen_text.tick()
+assert said[-1][0] == "By playing you agree to the Terms of Service", said[-1]
+assert sum("Terms of Service" in s for s, _i in said) == 1
+print("unknown screens OK")
 m.on_disable()
 print("ALL ROUND 25 TESTS OK")

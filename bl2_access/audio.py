@@ -34,15 +34,15 @@ SOUNDS: list[tuple[str, str, str]] = [
     ("wall", "Wall click", "A soft click when there's a wall close in front of or beside you."),
     ("ledge", "Ledge warning", "A falling tone when there's a drop ahead of you."),
     ("ui_jump", "Jump cue", "A rising boing when there's something you can jump over, or a gap you can jump across."),
-    ("weapon", "Weapons on the ground", "A steady ringing tone, like a held bell. The rarer the weapon, the higher it rings: common, uncommon, rare, epic, legendary, then pearlescent and better. The preview plays them from common up."),
+    ("weapon", "Weapons on the ground", "A soft, steady ringing tone, like a held bell. The rarer the weapon, the higher it rings: common, uncommon, rare, epic, legendary, then pearlescent and better. The preview plays them from common up."),
     ("item", "Shields, grenade mods, class mods and relics on the ground", "A steady hollow tone, rising with rarity the same way as weapons, so you can tell gear from guns."),
     ("ammo", "Ammo on the ground", "A low, steady hum."),
     ("health", "Health on the ground", "A soft, warm two-note chord."),
-    ("money", "Money and eridium on the ground", "A soft, very high steady tone."),
+    ("money", "Money and eridium on the ground", "A soft, steady tone, a little higher than the weapons."),
     ("loot", "Other loot on the ground", "A soft, low steady tone."),
     ("container", "Chests and containers", "A woody low buzz for chests, lockers and crates you haven't opened."),
     ("interactive", "Doors, switches, vendors and travel", "A steady hollow tone for doors, switches, vending machines and fast travel stations."),
-    ("quest", "Quest items", "A steady high two-note chord for quest items and mission objects."),
+    ("quest", "Quest items", "A steady low two-note chord for quest items and mission objects."),
     ("ui_move", "Menu move", "A short tick when you move the highlight in a menu."),
     ("ui_select", "Menu select", "Two rising notes when you pick something in a menu."),
     ("ui_back", "Menu back", "Two falling notes when you go back in a menu."),
@@ -441,39 +441,39 @@ CYCLE = 1 / SEG                 # 12.5 Hz: frequencies are multiples of this
 # plus the harmonic recipe [(harmonic, weight)].
 #
 # Every sound is steady (no beeping): one held tone or chord, which only changes as you turn
-# and walk. The one exception is the container's slow throb, kept as it was. Each kind has its
-# own pitch and tone colour, and the middle (about 450 to 1000 Hz) is kept clear for the
-# beacon (700 Hz, rising and falling with height):
-#   ammo 150 Hz hum, container 200 throb, other loot 250, health 325 chord, doors 400 hollow
-#     | beacon 500-1000 |
-#   quest 1100 + 1650 chord, weapons and gear 1250-3000 by rarity, money 2800
+# and walk. The one exception is the container's slow throb. Each kind has its own pitch and
+# tone colour, and the middle (about 450 to 1000 Hz) is kept clear for the beacon (700 Hz,
+# rising and falling with height). Nothing goes above about 1.6 kHz: high tones are the first
+# to go with hearing loss, and they're tiring (a tester's report). Overtones are kept soft.
+#   ammo 150 Hz hum, quest 175 + 262 chord, container 200 throb, other loot 250, health 300 chord,
+#   doors 400 hollow  | beacon 500-1000 |  weapons and gear 1050-1550 by rarity, money 1600 soft
 #
-# Weapons ring like a bell (a few bell-like overtones); shields, grenade mods, class mods and
-# relics have a hollow, woodwind-like tone. Both rise in pitch with rarity.
+# Weapons ring like a soft bell; shields, grenade mods, class mods and relics have a hollow,
+# woodwind-like tone. Both rise a step with each rarity.
 RARITIES = ["common", "uncommon", "rare", "epic", "legendary", "pearlescent or better"]
-RARITY_CYCLES = [100, 120, 144, 172, 208, 240]   # 1250, 1500, 1800, 2150, 2600, 3000 Hz
-RING = [(1, 1.0), (2, 0.3), (2.76, 0.18), (5.4, 0.05)]
-HOLLOW = [(1, 1.0), (3, 0.2), (5, 0.08)]
+RARITY_CYCLES = [84, 92, 100, 108, 116, 124]   # 1050, 1150, 1250, 1350, 1450, 1550 Hz
+RING = [(1, 1.0), (2, 0.15), (2.76, 0.05)]
+HOLLOW = [(1, 1.0), (3, 0.12)]
 
 LOOPS: dict[str, tuple[list[tuple[int, float]], list[tuple[float, float]]]] = {
-    # ammo: a low, steady hum (overtones so it carries on small speakers)
+    # ammo: a low, steady hum (a little overtone so it carries on small speakers)
     "ammo": ([(12, 1.0)], [(1, 1.0), (2, 0.5), (3, 0.1)]),
     # health: a soft, warm chord (a major third)
-    "health": ([(26, 0.85)], [(1, 1.0), (1.25, 0.6)]),
-    # money and eridium: a soft, very high tone
-    "money": ([(224, 0.4)], [(1, 1.0)]),
-    # quest items: a steady open fifth
-    "quest": ([(88, 0.85)], [(1, 1.0), (1.5, 0.8)]),
+    "health": ([(24, 0.85)], [(1, 1.0), (1.25, 0.6)]),
+    # money and eridium: a soft tone, the highest of the loot sounds
+    "money": ([(128, 0.35)], [(1, 1.0)]),
+    # quest items: a steady, low open fifth
+    "quest": ([(14, 0.9)], [(1, 1.0), (1.5, 0.8), (2, 0.2)]),
     # chests, lockers, crates: woody low throb (unchanged)
     "container": ([(16, 1.0), (16, 0.65)], [(1, 1.0), (2, 0.3), (3, 0.08)]),
     # doors, switches, vendors, fast travel: a steady hollow tone
-    "interactive": ([(32, 0.85)], [(1, 1.0), (3, 0.2)]),
+    "interactive": ([(32, 0.85)], [(1, 1.0), (3, 0.12)]),
     # anything else lying on the ground: a soft low tone
     "loot": ([(20, 0.8)], [(1, 1.0), (2, 0.1)]),
 }
 for _r, _c in enumerate(RARITY_CYCLES, start=1):
-    LOOPS[f"weapon{_r}"] = ([(_c, 0.75)], RING)
-    LOOPS[f"item{_r}"] = ([(_c, 0.7)], HOLLOW)
+    LOOPS[f"weapon{_r}"] = ([(_c, 0.6)], RING)
+    LOOPS[f"item{_r}"] = ([(_c, 0.55)], HOLLOW)
 
 
 def loop_length(kind: str) -> int:

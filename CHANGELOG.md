@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+From a tester's reports:
+
+- **Menus**: the move sound only plays when the highlight actually moves, so there's no click at the end of a list.
+- **Character select**: says how to choose: move to hear the other characters, A or Enter to choose, B or Escape to go
+  back.
+- **Screens without a reader of their own**, such as the licence and privacy policy: the mod says the screen's name and how
+  to leave it, reads any text the game puts on it, and logs the screen so it can be supported properly.
+- **Quieter by default**: the master cue volume starts at 45% instead of 80%, to sit under the game's own sound. Saved
+  settings are kept.
+- **No high-pitched loot tones**: weapons and gear now sit between about 1 and 1.6 kHz instead of up to 3 kHz, with softer
+  overtones, and quest items use a low chord. Hearing loss usually affects high frequencies first.
+- **Handing in missions**: use assist now also talks to the character the "Talk to" prompt just named, so you can hand in
+  a mission (for example My First Gun, to Claptrap) without aiming at them. A mission that's ready to hand in says how.
+
 ## 0.2.0
 
 - **Line tests that work**: the game's own line tests give fixed answers through the mod manager, so the mod now calls

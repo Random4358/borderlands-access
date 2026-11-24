@@ -194,8 +194,20 @@ class InputState:
 
     MULTI_TAP_WINDOW = 0.35  # a tap is passed to the game only once no further tap follows in this time
 
+    MOVE_WAIT = 0.4   # seconds to wait for a menu move to be read before dropping its sound
+
     def tick(self) -> None:
-        """Pass held-back modifier taps to the game once it's clear they weren't a triple press."""
+        """Pass held-back modifier taps to the game once it's clear they weren't a triple press;
+        play a held-back menu move sound once the move has been read."""
+        pm = getattr(self, "pending_move", None)
+        if pm is not None:
+            from .speech import speech
+
+            if getattr(speech, "said_count", 0) > pm[1]:
+                self.pending_move = None
+                audio.play("ui", snd.ui("move", features.s.volume))
+            elif time.perf_counter() - pm[0] > self.MOVE_WAIT:
+                self.pending_move = None   # nothing to move to: stay quiet
         if self.pending_tap is None or time.perf_counter() < self.pending_tap[0]:
             return
         _due, ptr, cid, key, count = self.pending_tap
@@ -334,7 +346,11 @@ class InputState:
 
             panels.before_nav()
             if sounds:
-                audio.play("ui", snd.ui("move", features.s.volume))
+                # Held back until the highlight really moves (a new entry is read). At the end
+                # of a list nothing moves, so there's no sound (a tester's report).
+                from .speech import speech
+
+                self.pending_move = (now, getattr(speech, "said_count", 0))
         elif key in MENU_SELECT and sounds:
             audio.play("ui", snd.ui("select", features.s.volume))
         elif key in MENU_BACK and sounds:
@@ -387,7 +403,7 @@ MENU_NAMES = {
     "LatentRewardGFxMovie": "Reward",
     "TrainingDialogGFxMovie": "Tutorial message",
     "WillowGFxMoviePressStart": "Title screen. Press A or Enter to start",
-    "OnlineMessageGFxMovie": "Online status message from the game. Press A or Enter to continue",
+    "OnlineMessageGFxMovie": "Message from the game. Press A or Enter to accept or continue, B or Escape to go back",
     "CharacterSelectionReduxGFxMovie": "Character selection",
     "WillowGFxLobbyLoadCharacter": "Load character",
 }
@@ -460,6 +476,12 @@ class Menus:
         self.last_movie_ptr = game.weak(movie)
         cls = game.class_name(movie)
         trace.note(f"movie opened: {cls}")
+        try:   # screens with no reader of their own: read their text, say how to leave
+            from .screen_text import screen_text
+
+            screen_text.opened(movie, self.announce)
+        except Exception:
+            pass
         if cls not in MENU_NAMES:
             return
         try:
