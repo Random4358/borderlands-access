@@ -193,5 +193,29 @@ assert G.FLOOR_SEEN and G.TRACE_METHOD == "direct engine call", (G.TRACE_METHOD,
 assert G.fast_trace(me, (0, 0, 0), (0, 0, -500)) is False and G.fast_trace(me, (0, 0, 0), (500, 0, 0)) is True
 N.direct = real; G.FLOOR_SEEN = False; G.TRACE_METHOD = "FastTrace(end, start)"
 print("self-check picks the direct call OK")
+
+# --- turning the view: the game's SetRotation does nothing (seen in game), so the value is written
+class GamePC:
+    def __init__(s): s.Rotation = NS(Pitch=3158, Yaw=55802, Roll=0); s.calls = []
+    def SetRotation(s, r): s.calls.append("SetRotation")          # accepted, does nothing
+    def ClientSetRotation(s, r): s.calls.append("ClientSetRotation")
+pc = GamePC()
+assert G.set_view(pc, 4998, -12985) is True
+assert pc.Rotation.Pitch == 4998 and pc.Rotation.Yaw == (-12985) & 0xFFFF and pc.calls == []
+assert G.VIEW_METHOD == "Rotation value"
+class Frozen:
+    """Nothing turns it: set_view must say so instead of claiming success."""
+    def __init__(s): object.__setattr__(s, "_r", NS(Pitch=0, Yaw=0, Roll=0))
+    @property
+    def Rotation(s): return s._r
+    @Rotation.setter
+    def Rotation(s, v): pass
+    def SetRotation(s, r): pass
+    def ClientSetRotation(s, r): pass
+assert G.set_view(Frozen(), 1000, 2000) is False
+assert any("couldn't turn the view" in n for n in notes)
+# wrap-around: 65535 and -1 are the same direction
+pc.Rotation = NS(Pitch=0, Yaw=65535, Roll=0); assert G._rotation_is(pc, 0, -1)
+print("turning the view OK")
 m.on_disable()
 print("ALL ROUND 24 TESTS OK")

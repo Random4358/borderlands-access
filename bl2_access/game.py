@@ -155,19 +155,56 @@ def aim_rotation(eye: tuple[float, float, float], target: tuple[float, float, fl
     return int(pitch / RAD_PER_UU), int(yaw / RAD_PER_UU)
 
 
-def set_view(controller: Any, pitch_uu: int, yaw_uu: int) -> bool:
-    r = rot(pitch_uu, yaw_uu, 0)
-    for fn in ("SetRotation", "ClientSetRotation"):
-        try:
-            getattr(controller, fn)(r)
-            return True
-        except Exception:
-            continue
+VIEW_METHOD = ""        # how the view was last turned successfully (logged once)
+_view_notes: set = set()
+
+
+def _rotation_is(controller: Any, pitch_uu: int, yaw_uu: int) -> bool:
     try:
-        controller.Rotation = r
-        return True
+        r = controller.Rotation
+        dp = (int(r.Pitch) - int(pitch_uu)) & 0xFFFF
+        dy = (int(r.Yaw) - int(yaw_uu)) & 0xFFFF
     except Exception:
         return False
+    return min(dp, 0x10000 - dp) <= 2 and min(dy, 0x10000 - dy) <= 2
+
+
+def set_view(controller: Any, pitch_uu: int, yaw_uu: int) -> bool:
+    """Turn your view. True only if the view really changed (read back afterwards).
+
+    The game's SetRotation / ClientSetRotation take the call and do nothing when the mod
+    manager calls them (seen in game: the view stayed exactly where it was), so the
+    controller's Rotation value is written directly first; the functions are only tried if
+    that didn't take."""
+    global VIEW_METHOD
+    r = rot(pitch_uu, yaw_uu, 0)
+    tries = [("Rotation value", lambda: setattr(controller, "Rotation", r)),
+             ("SetRotation", lambda: controller.SetRotation(r)),
+             ("ClientSetRotation", lambda: controller.ClientSetRotation(r))]
+    for name, fn in tries:
+        try:
+            fn()
+        except Exception:
+            continue
+        if _rotation_is(controller, pitch_uu, yaw_uu):
+            if name != VIEW_METHOD:
+                VIEW_METHOD = name
+                _view_note(f"view turned with the {name}")
+            return True
+    _view_note("couldn't turn the view: the rotation didn't change")
+    return False
+
+
+def _view_note(text: str) -> None:
+    if text in _view_notes:
+        return
+    _view_notes.add(text)
+    try:
+        from . import trace
+
+        trace.note(text)
+    except Exception:
+        pass
 
 
 def clock(rel_yaw: float) -> str:

@@ -629,6 +629,7 @@ class Features:
 
         if not self.ads_held:
             self.lock_on_key = None
+            self.last_lock_view = None
             return
         if self.s.aim_mode == "lock":
             self.lock_on(snap)
@@ -680,11 +681,17 @@ class Features:
             audio.play("target", snd.ui("lock", self.s.volume))
             if self.s.speak_target:
                 speech.say(f"Locked on {game.display_name(target.actor)}", interrupt=True)
+        # Did last frame's turn hold, or did the game put the view back?
+        held = None
+        last = getattr(self, "last_lock_view", None)
+        if last is not None:
+            held = game._rotation_is(snap.pc, *last)
         pitch, yaw = game.aim_rotation(snap.eye, target.pos)
         ok = game.set_view(snap.pc, pitch, yaw)
-        self._log_lock(snap, target, pitch, yaw, ok)
+        self.last_lock_view = (pitch, yaw) if ok else None
+        self._log_lock(snap, target, pitch, yaw, ok, held)
 
-    def _log_lock(self, snap: Snapshot, target: Enemy, pitch: int, yaw: int, ok: bool) -> None:
+    def _log_lock(self, snap: Snapshot, target: Enemy, pitch: int, yaw: int, ok: bool, held: bool | None = None) -> None:
         n = getattr(self, "lock_logs", 0)
         if n >= 8:
             return
@@ -698,7 +705,8 @@ class Features:
             got = f"unreadable ({e})"
         trace.note(f"lock-on: {len(self.enemies)} enemies ({sum(e.visible for e in self.enemies)} in view), "
                    f"locked {target.key} {target.rel.dist / 100:.0f} m, {math.degrees(target.rel.aim_error):.0f} deg "
-                   f"off; view set to {pitch}, {yaw} ({'accepted' if ok else 'refused'}), now {got}")
+                   f"off; view set to {pitch}, {yaw} ({'took' if ok else 'did not take'}, via {game.VIEW_METHOD or 'nothing'}), "
+                   f"now {got}; last frame's turn {'held' if held else 'was undone by the game' if held is False else 'n/a'}")
 
     # ---------------------------------------------------------------- probes
     def probes(self, snap: Snapshot, now: float) -> None:
