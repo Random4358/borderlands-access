@@ -46,6 +46,7 @@ opt_diagnostics = BoolOption(
     "Diagnostic logging", True,
     description="Writes key presses and menu events to logs\\diagnostic.log so problems can be fixed. Applies on next launch.",
 )
+opt_direct_trace = BoolOption("Direct engine line tests (experimental)", True)
 opt_auto_trace = BoolOption(
     "Trace menu functions at startup", False,
     description="Developer tool: hooks hundreds of game functions and logs them to logs\\trace.log. Can crash the game during level loads, so leave off unless asked. F2 starts a trace by hand.",
@@ -144,6 +145,7 @@ HELP = {
     opt_speak_blocked: "When you push against something and don't move, says what's in the way and which side is open, for example: Blocked, open to the left. Or: Low obstacle, jump over." + TRACE_NOTE,
     opt_jump: "A rising boing when there's an obstacle you can jump over, or a gap you can jump across." + TRACE_NOTE,
     opt_low_health: "A heartbeat when your health falls below the threshold, faster when it's very low.",
+    opt_direct_trace: "Wall clicks, ledge warnings, jump cues, the blocked messages, cover and route finding need line tests: checks of whether a straight line through the level is clear. The game's own way of doing them gives fixed answers through the mod manager, so this calls the engine's line test code directly. If the game ever stops during the very first direct call, it switches itself off for good. Turn it off if you have crashes you think are caused by it.",
     opt_low_health_pct: "The heartbeat starts when your health is below this percentage of your maximum.",
 }
 for _opt, _text in HELP.items():
@@ -157,7 +159,7 @@ SOUND_OPTS = {
 }
 
 OPTIONS = [
-    GroupedOption("General", [opt_volume, opt_speech, opt_prism_stdcall, opt_test, opt_diagnostics, opt_auto_trace]),
+    GroupedOption("General", [opt_volume, opt_speech, opt_prism_stdcall, opt_test, opt_diagnostics, opt_direct_trace, opt_auto_trace]),
     GroupedOption("Controller and menus", [opt_modifier, opt_menu_sounds, opt_menu_announce, opt_menu_reader, opt_menu_desc]),
     GroupedOption("Enemy radar", [opt_radar, opt_enemy_sound, opt_enemy_volume, opt_radar_range, opt_radar_max, opt_radar_hidden, opt_all_ai]),
     GroupedOption("Targeting", [opt_targeting, opt_speak_target, opt_aim_mode, opt_aim_assist]),
@@ -215,6 +217,12 @@ def sync_settings() -> None:
     menus.announce = opt_menu_announce.value
     reader.enabled = opt_menu_reader.value
     reader.read_descriptions = opt_menu_desc.value
+    try:
+        from .native_trace import direct as _direct
+
+        _direct.enabled = bool(opt_direct_trace.value)
+    except Exception:
+        pass
     try:
         from .mod_menu import modmenu as _mm
 

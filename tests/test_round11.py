@@ -156,7 +156,7 @@ assert group_names[0] == "General" and group_names[-1] == "Sound glossary and vo
 
 # --- moving and changing
 assert key("XboxTypeS_DPad_Down") == (Block, True)           # swallowed: the game doesn't see it
-assert said[-1][0].startswith("Speech output,") and said[-1][0].endswith("2 of 6"), said[-1]
+assert said[-1][0].startswith("Speech output,") and said[-1][0].endswith("2 of 7"), said[-1]
 key("XboxTypeS_DPad_Up"); assert said[-1][0].startswith("Cue volume, 80 percent"), said[-1]
 key("XboxTypeS_DPad_Right"); assert said[-1][0] == "81 percent" and m.opt_volume.value == 81
 key("XboxTypeS_DPad_Left"); assert m.opt_volume.value == 80

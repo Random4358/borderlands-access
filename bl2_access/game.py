@@ -388,7 +388,14 @@ def _hit_of(r: Any) -> Any:
     return r[0] if isinstance(r, tuple) else r
 
 
+def _direct(c: Any, a: tuple, b: tuple) -> bool:
+    from .native_trace import direct
+
+    return direct.fast_trace(c, a, b)
+
+
 TRACE_METHODS: dict[str, Any] = {
+    "direct engine call": _direct,   # native_trace.py: the engine's own code, not via the SDK
     "FastTrace(end, start)": lambda c, a, b: bool(c.FastTrace(vec(*b), vec(*a))),
     "FastTrace(TraceEnd=, TraceStart=)": lambda c, a, b: bool(c.FastTrace(TraceEnd=vec(*b), TraceStart=vec(*a))),
     "FastTrace(end, start, extent, complex)": lambda c, a, b: bool(c.FastTrace(vec(*b), vec(*a), vec(0, 0, 0), False)),
