@@ -44,6 +44,7 @@ LOOK_AHEAD = 1500.0     # uu: how much of the straight line must be clear to hea
 STEER_ANGLES = (25, 45, 65, 90, 115, 140)  # degrees either side of the straight line
 STUCK_SECONDS = 3.0     # walking this long without getting 0.4 m closer = try the other side
 LEAD = 0.1              # seconds of beacon tone queued ahead
+BODY = 35.0             # uu: half your width, for "can you walk straight there" checks
 FAR = 3500.0           # uu: beyond this the planner uses a coarse grid (35 m)
 PLAN_CELLS = 2500      # planner search limit, doubled (up to 4x) when a partial route stalls
 PLAN_BUDGET = 120      # line traces the planner may use per frame
@@ -119,6 +120,7 @@ class Route:
         self.stuck_since, self.forced_until = None, 0.0
         self.planner, self.replan_at, self.plan_logged = None, 0.0, ""
         self.path, self.path_kind, self.path_cell = [], "", 90.0
+        self.path_moves, self.climb_told = [], set()
         self._reset_known()
 
     def _note(self, text: str) -> None:
@@ -262,15 +264,55 @@ class Route:
         self._watch_progress(here, now)
 
         def visible(q: tuple) -> bool:
-            return all(game.fast_trace(pawn, (here[0], here[1], here[2] + h), (q[0], q[1], q[2] + h)) is not False
-                       for h in (50.0, 130.0))
+            """Can you walk straight there? Checked along both sides of your body as well as the
+            middle, so a line that only just clears a corner doesn't leave you snagged on it."""
+            dx, dy = q[0] - here[0], q[1] - here[1]
+            n = math.hypot(dx, dy) or 1.0
+            sx, sy = -dy / n * BODY, dx / n * BODY
+            for ox, oy, hts in ((0.0, 0.0, (50.0, 130.0)), (sx, sy, (50.0,)), (-sx, -sy, (50.0,))):
+                for h in hts:
+                    if game.fast_trace(pawn, (here[0] + ox, here[1] + oy, here[2] + h),
+                                       (q[0] + ox, q[1] + oy, q[2] + h)) is False:
+                        return False
+            return True
 
         nxt = follow(self.path, here, visible)
         if nxt is None:
             return None
+        self._climb_cue(here)
         if self.path_kind == "done" and nxt == self.path[-1]:
             return target_pos
         return (nxt[0], nxt[1], nxt[2] + 100)
+
+    def _climb_cue(self, here: tuple) -> None:
+        """Say "Jump up here" / "Drop down here" when you reach a spot on the route where it
+        goes up onto a ledge or down off one (once each)."""
+        moves = getattr(self, "path_moves", [])
+        if len(moves) != len(self.path) or len(self.path) < 2:
+            return
+        i = min(range(len(self.path)), key=lambda k: math.dist(here[:2], self.path[k][:2]))
+        told = getattr(self, "climb_told", set())
+        self.climb_told = told
+        for j in range(i + 1, min(len(self.path), i + 3)):
+            move = moves[j]
+            if move not in ("jump", "drop"):
+                continue
+            edge = self.path[j - 1]
+            spot = (round(edge[0] / 50), round(edge[1] / 50), move)
+            if spot in told or math.dist(here[:2], edge[:2]) > 140:
+                continue
+            told.add(spot)
+            from .speech import speech
+
+            if move == "jump":
+                try:
+                    audio.play("ui", snd.ui("jump", 0.8))
+                except Exception:
+                    pass
+                speech.say("Jump up here", interrupt=True)
+            else:
+                speech.say("Drop down here", interrupt=True)
+            return
 
     def _take_plan(self, pl: Any, here: tuple, now: float) -> None:
         from .speech import speech
@@ -297,6 +339,11 @@ class Route:
         else:
             self.limit, self.last_gap = PLAN_CELLS, None
         self.path, self.path_kind, self.path_cell = list(pl.path), pl.state, pl.cell
+        self.path_moves = list(getattr(pl, "moves", [])) or ["walk"] * len(self.path)
+        n_jump, n_drop = self.path_moves.count("jump"), self.path_moves.count("drop")
+        if n_jump or n_drop:
+            self._note(f"route planner: the route has {n_jump} jump{'s' if n_jump != 1 else ''} up and "
+                       f"{n_drop} drop{'s' if n_drop != 1 else ''} down")
         # distance left along the route from each point, for the progress check
         self.tail = [0.0] * len(self.path)
         for k in range(len(self.path) - 2, -1, -1):

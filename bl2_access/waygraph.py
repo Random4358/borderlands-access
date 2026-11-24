@@ -365,7 +365,11 @@ class WayGraph:
             hi = h(i)
             if hi < best_h:
                 best, best_h = i, hi
-            if hi <= GOAL_NEAR:
+            q = P[i]
+            # Reached: close across the floor and at about the target's height (points are
+            # where people's bodies were, about a metre up; a point under a marker on a ledge
+            # isn't there).
+            if math.hypot(q[0] - goal[0], q[1] - goal[1]) <= GOAL_NEAR and -150.0 <= goal[2] - q[2] <= 200.0:
                 reached = i
                 break
             qi = P[i]

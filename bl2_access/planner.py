@@ -1,10 +1,17 @@
 """Route finding of our own, for levels where the game gives the player no route.
 
-An A* search over a grid of points about a metre apart, centred on where you stand. A step from
-one point to a neighbour counts as walkable when line traces find nothing at knee height or
-chest height between them, and there's floor at the neighbour no more than a step up or a short
-drop down. That lets the route go round walls, through doorways and gaps, and up gentle
-slopes, and keeps it off ledges.
+An A* search over a grid of points about a metre apart, centred on where you stand. Each point
+also has a height, so a floor and a ledge above it are different places. Three kinds of move:
+
+* walk: line traces find nothing at knee or chest height between the two points, and there's
+  floor at the neighbour no more than a step up or a short drop down (stairs, slopes);
+* jump up: onto a ledge, crate or step up to about a jump's height, with headroom to jump;
+* drop down: off an edge onto floor up to a few metres below.
+
+Jumps and drops cost more than walking, so the route uses them only when they help, for
+example to reach a marker on a ledge. A target counts as reached only at about its height:
+standing under a marker on a ledge isn't there yet. Each point of the route says how it's
+reached (`moves`), so the beacon can say "Jump up here" or "Drop down here".
 
 The search does a limited number of traces each frame (`step(budget)`), so it never causes a
 stutter. A typical detour is found in well under a second. If the target can't be reached
@@ -29,6 +36,11 @@ CHEST = 130.0
 STEP_UP = 70.0       # highest floor rise between neighbours that still counts as walkable (stairs)
 DROP = 80.0          # deepest floor drop between neighbours that still counts as walkable
 MAX_CELLS = 1600     # search limit (about a 40 m wide area)
+JUMP_UP = 110.0      # highest ledge you can jump onto (uu)
+MAX_DROP = 450.0     # deepest drop the route will take you down
+JUMP_COST = 3.0      # a jump or a drop counts as this many cells of walking
+ABOVE = 230.0        # a target up to this far above the floor counts as reached (markers float)
+BELOW = 80.0         # and this far below it
 NEIGHBOURS = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)]
 
 
@@ -37,6 +49,7 @@ class GridPlanner:
         self.trace = trace
         self.state = "idle"        # idle, running, done (reached the target), partial, failed
         self.path: list[Point] = []
+        self.moves: list[str] = []     # how each point of the path is reached: walk, jump or drop
         self.goal: Point | None = None
         self._job: Iterator[None] | None = None
         self._spent = 0
@@ -85,9 +98,14 @@ class GridPlanner:
         """Floor height at (x, y), searching from a step above z to a drop below it, to within
         about 10 uu."""
         up, down = getattr(self, "up", STEP_UP), getattr(self, "down", DROP)
-        if self._t((x, y, z + up), (x, y, z - down)) is not False:
+        return self._floor_between(x, y, z + up, z - down)
+
+    def _floor_between(self, x: float, y: float, hi: float, lo: float) -> float | None:
+        """The highest floor at (x, y) between heights lo and hi, or None."""
+        if self._t((x, y, hi + 40), (x, y, hi)) is False:
+            return None  # solid already at the top of the range: the surface is higher than that
+        if self._t((x, y, hi), (x, y, lo)) is not False:
             return None  # no floor in reach: a drop, a gap or a hole
-        lo, hi = z - down, z + up
         while hi - lo > 20:
             mid = (lo + hi) / 2
             if self._t((x, y, hi), (x, y, mid)) is False:
@@ -96,25 +114,54 @@ class GridPlanner:
                 hi = mid
         return (lo + hi) / 2
 
+    def _clear(self, a: Point, b: Point, nz: float, cz: float) -> bool:
+        """Nothing at knee or chest height between two floor points."""
+        return (self._t((a[0], a[1], cz + KNEE), (b[0], b[1], nz + KNEE)) is True
+                and self._t((a[0], a[1], cz + CHEST), (b[0], b[1], nz + CHEST)) is True)
+
     # ------------------------------------------------------------ the search (a generator: yields to share time)
     def _search(self, feet: Point, goal: Point) -> Iterator[None]:
         ox, oy, oz = feet
         CELL = self.cell
+        gz = goal[2]
 
-        def centre(c: tuple[int, int]) -> tuple[float, float]:
+        def centre(c: tuple) -> tuple[float, float]:
             return ox + c[0] * CELL, oy + c[1] * CELL
 
-        def h(c: tuple[int, int]) -> float:
-            x, y = centre(c)
-            return math.hypot(goal[0] - x, goal[1] - y)
+        def key(ix: int, iy: int, z: float) -> tuple:
+            return (ix, iy, int(round(z / 100.0)))
 
-        start = (0, 0)
+        def h(c: tuple, zc: float) -> float:
+            x, y = centre(c)
+            flat = math.hypot(goal[0] - x, goal[1] - y)
+            # how far the floor is from the target's height band (0 inside it)
+            vert = max(0.0, (gz - ABOVE) - zc) + max(0.0, zc - (gz + BELOW))
+            return math.hypot(flat, vert)
+
+        def at_goal(c: tuple, zc: float) -> bool:
+            x, y = centre(c)
+            flat = math.hypot(goal[0] - x, goal[1] - y)
+            right_height = -BELOW <= gz - zc <= ABOVE
+            # On the target, or right beside it (the target itself is often inside furniture or
+            # a wall, so the last metre can't be walked); either way at about its height.
+            return right_height and flat <= CELL * 1.5
+
+        start = key(0, 0, oz)
         z = {start: oz}
         g = {start: 0.0}
-        parent: dict[tuple[int, int], tuple[int, int] | None] = {start: None}
-        open_heap = [(h(start), 0.0, start)]
-        closed: set[tuple[int, int]] = set()
-        best, best_h = start, h(start)
+        how: dict[tuple, str] = {start: "walk"}
+        parent: dict[tuple, tuple | None] = {start: None}
+        open_heap = [(h(start, oz), 0.0, start)]
+        closed: set[tuple] = set()
+        best, best_h = start, h(start, oz)
+
+        def offer(nb: tuple, nz: float, cost: float, move: str, cur: tuple) -> None:
+            if cost < g.get(nb, 1e18):
+                g[nb] = cost
+                z[nb] = nz
+                how[nb] = move
+                parent[nb] = cur
+                heapq.heappush(open_heap, (cost + h(nb, nz), cost, nb))
 
         while open_heap:
             _f, gc, cur = heapq.heappop(open_heap)
@@ -122,53 +169,63 @@ class GridPlanner:
                 continue
             closed.add(cur)
             self.cells_searched = len(closed)
-            hc = h(cur)
+            cz = z[cur]
+            hc = h(cur, cz)
             if hc < best_h:
                 best, best_h = cur, hc
-            # Reached: on the target, or right beside it at about its height (the target itself is
-            # often inside furniture or a wall, so the last metre can't be walked).
-            if hc <= CELL * 0.75 or (hc <= CELL * 1.5 and abs(goal[2] - z[cur]) < 250):
-                best = cur
-                self._finish(best, parent, z, centre, reached=True, gap=hc)
+            if at_goal(cur, cz):
+                self._finish(cur, parent, z, how, centre, reached=True, gap=0.0)
                 return
             if len(closed) >= self.max_cells:
                 break
             cx, cy = centre(cur)
-            cz = z[cur]
+            target_above = gz - cz > ABOVE
             for dx, dy in NEIGHBOURS:
-                nb = (cur[0] + dx, cur[1] + dy)
-                if nb in closed:
-                    continue
-                nx, ny = centre(nb)
-                # Walkable step: floor at the other end (no drop, at most a stair step up), then
-                # nothing in the way at knee or chest height between the two floor heights.
+                ix, iy = cur[0] + dx, cur[1] + dy
+                nx, ny = centre((ix, iy))
+                step = CELL * (1.414 if dx and dy else 1.0)
+                walked = False
+                # walk: floor at the other end (at most a stair step up or a small drop), and
+                # nothing in the way at knee or chest height
                 nz = self._floor(nx, ny, cz)
                 if nz is None:
                     self.rejects["no floor"] += 1
-                    yield from self._pause()
-                    continue
-                if self._t((cx, cy, cz + KNEE), (nx, ny, nz + KNEE)) is not True:
+                elif self._clear((cx, cy), (nx, ny), nz, cz):
+                    walked = True
+                    nb = key(ix, iy, nz)
+                    if nb not in closed:
+                        offer(nb, nz, gc + step, "walk", cur)
+                else:
                     self.rejects["knee"] += 1
-                    yield from self._pause()
-                    continue
-                if self._t((cx, cy, cz + CHEST), (nx, ny, nz + CHEST)) is not True:
-                    self.rejects["chest"] += 1
-                    yield from self._pause()
-                    continue
                 yield from self._pause()
-                cost = gc + (CELL * (1.414 if dx and dy else 1.0))
-                if cost < g.get(nb, 1e18):
-                    g[nb] = cost
-                    z[nb] = nz
-                    parent[nb] = cur
-                    heapq.heappush(open_heap, (cost + h(nb), cost, nb))
-        self._finish(best, parent, z, centre, reached=False, gap=best_h)
+                # jump up: a ledge higher than a step but within a jump, with room to jump
+                # (one cheap check first: open space above the obstacle at jump height, which a
+                # wall fails at once)
+                if (not walked or target_above) and self._t(
+                        (cx, cy, cz + JUMP_UP + KNEE), (nx, ny, cz + JUMP_UP + KNEE)) is True:
+                    jz = self._floor_between(nx, ny, cz + JUMP_UP, cz + self.up + 1)
+                    if (jz is not None
+                            and self._t((cx, cy, cz + CHEST), (cx, cy, cz + JUMP_UP + CHEST)) is True
+                            and self._clear((cx, cy), (nx, ny), jz, jz)):
+                        nb = key(ix, iy, jz)
+                        if nb not in closed:
+                            offer(nb, jz, gc + step + CELL * JUMP_COST, "jump", cur)
+                    yield from self._pause()
+                # drop down: off an edge onto floor further below
+                if nz is None:
+                    dz_ = self._floor_between(nx, ny, cz - self.down, cz - MAX_DROP)
+                    if dz_ is not None and self._t((cx, cy, cz + KNEE), (nx, ny, cz + KNEE)) is True:
+                        nb = key(ix, iy, dz_)
+                        if nb not in closed:
+                            offer(nb, dz_, gc + step + CELL * JUMP_COST, "drop", cur)
+                    yield from self._pause()
+        self._finish(best, parent, z, how, centre, reached=False, gap=best_h)
 
     def _pause(self) -> Iterator[None]:
         if self._spent >= self._budget:
             yield None
 
-    def _finish(self, end, parent, z, centre, reached: bool, gap: float = 0.0) -> None:
+    def _finish(self, end, parent, z, how, centre, reached: bool, gap: float = 0.0) -> None:
         self.best_gap = gap
         self.runs += 1
         cells = []
@@ -178,6 +235,7 @@ class GridPlanner:
             c = parent[c]
         cells.reverse()
         self.path = [(*centre(c), z[c]) for c in cells]
+        self.moves = [how.get(c, "walk") for c in cells]
         if reached:
             self.state = "done"
         elif len(self.path) > 1:
