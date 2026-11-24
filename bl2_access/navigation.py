@@ -519,6 +519,7 @@ class Beacon:
         self.step = 0
         self.started = False
         self.last = ("beacon", BEACON_BASE, 0.0, 0.0, False)
+        self.duck = 1.0   # set by features.tick: quieter while enemy tones play
 
     def stream(self) -> Any:
         return getattr(audio, "nav_stream", None)
@@ -537,7 +538,9 @@ class Beacon:
             on_course = abs(math.degrees(rel.rel_yaw)) <= ON_COURSE_DEG
             kind = "beacon_on" if on_course else "beacon"
             closeness = 1.0 - min(1.0, dist_target / 6000)
-            vol = (0.75 + 0.25 * closeness) * s.volume   # the loudest sound the mod makes
+            # The loudest sound the mod makes, except in a fight, when it steps back so the enemy
+            # tones (which share its pitch range) are clear.
+            vol = (0.75 + 0.25 * closeness) * s.volume * self.duck
             period = max(2, int(round(10 - 8 * closeness)))   # pulse every 0.8 s far .. 0.16 s close
             cycles = beacon_cycles(math.degrees(rel.elevation))
             while st.ahead() < LEAD:

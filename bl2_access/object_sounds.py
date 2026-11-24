@@ -109,7 +109,8 @@ def _still_usable(obj: Any) -> bool:
 
 SAME_SPOT = 200.0  # uu: things of the same kind this close together get one sound (a pile of ammo)
 BEACON_DUCK = 0.55  # object sounds while the beacon is on, so it stands out
-COMBAT_DUCK = 0.5   # and while enemy tones are playing
+COMBAT_DUCK = 0.2   # and much quieter while enemy tones are playing: the fight comes first
+BEACON_COMBAT = 0.3  # the beacon too, while enemy tones are playing (it shares their pitch range)
 
 
 class ObjectSounds:

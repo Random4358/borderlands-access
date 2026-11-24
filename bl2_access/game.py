@@ -637,7 +637,15 @@ def in_view(controller: Any, target: Any, rel: "Relative") -> bool:
         last = t if last is None else max(last, t)
     if last is None:
         return True
-    on_screen = math.degrees(rel.aim_error) <= 30   # well inside the screen, from the crosshair
+    # Well inside the screen. Aiming down sights zooms in, and then only what's near the
+    # crosshair is drawn, so the area that counts shrinks with the field of view.
+    try:
+        fov = float(controller.FOVAngle)
+    except Exception:
+        fov = 90.0
+    if not 1.0 <= fov <= 170.0:
+        fov = 90.0
+    on_screen = math.degrees(rel.aim_error) <= min(30.0, fov * 0.4)
     seen = (now - last) < 0.3 if on_screen else True
     if _sight_logged < 6 and on_screen:
         _sight_logged += 1

@@ -81,6 +81,9 @@ from array import array
 from bl2_access import audio as A
 from bl2_access.audio import audio as eng
 from bl2_access.combat_sounds import tones, aim_state
+from bl2_access import trace as _T
+notes = []
+_T.note = lambda text: notes.append(text)
 
 def samples(b):
     a = array("h"); a.frombytes(b); return a
@@ -214,8 +217,10 @@ assert f.lock_on_key == "Psycho" and abs(yaw_deg() - 5.14) < 0.5
 # Psycho moves; the view follows
 near_e.Location = NS(X=1000, Y=300, Z=0); drain(); tick()
 assert abs(yaw_deg() - math.degrees(math.atan2(300, 1000))) < 0.5, yaw_deg()
-# Psycho goes behind cover: lock-on picks the enemy nearest the crosshair instead
+# Psycho ducks behind cover: the lock holds for a moment, then moves to one you can see
 near_e.seen = False; drain(); tick()
+assert f.lock_on_key == "Psycho", f.lock_on_key
+f.lock_hidden_since -= 2.0; drain(); tick()
 assert f.lock_on_key != "Psycho" and said[-1][0].startswith("Locked on"), (f.lock_on_key, said[-1])
 near_e.seen = True
 # Back + A switches target in lock-on mode
@@ -237,5 +242,32 @@ m.opt_aim_mode.value = "Off"; world.pc.Rotation = NS(Pitch=0, Yaw=600, Roll=0); 
 assert world.pc.Rotation.Yaw == 600
 f.ads_held = False
 print("aim assist / off OK")
+
+# --- zoomed in (aiming down sights): the game draws only what's near the crosshair, so an
+#     enemy off to the side isn't called "behind cover" just because it wasn't drawn
+from bl2_access import game as G
+world.pc.FOVAngle = 20.0
+side = NS(LastRenderTime=40.0)                      # not drawn lately
+rel15 = G.relative((0, 0, 0), 0.0, 0.0, (1000.0, 270.0, 0.0))   # about 15 degrees off
+assert G.in_view(world.pc, side, rel15) is True
+rel3 = G.relative((0, 0, 0), 0.0, 0.0, (1000.0, 50.0, 0.0))     # right by the crosshair, not drawn: hidden
+assert G.in_view(world.pc, side, rel3) is False
+del world.pc.FOVAngle
+print("zoomed-in visibility OK")
+
+# --- lock-on still picks an enemy when none count as in view
+for e in (ahead_e, near_e, side_e, high_e, hid_e): e.seen = False
+f.lock_on_key = None; f.ads_held = True; m.opt_aim_mode.value = "Lock-on"; drain(); tick()
+assert f.lock_on_key is not None, f.lock_on_key
+assert any(n.startswith("lock-on:") for n in notes), notes[-3:]
+f.ads_held = False; m.opt_aim_mode.value = "Aim assist"
+for e in (ahead_e, near_e, side_e, high_e): e.seen = True
+print("lock-on without sight OK")
+
+# --- in a fight, the beacon steps back so the enemy tones are clear
+from bl2_access.navigation import beacon as NB
+from bl2_access.object_sounds import BEACON_COMBAT
+tick(); assert f.enemies and NB.duck == BEACON_COMBAT, NB.duck
+print("combat mixing OK")
 m.on_disable(); assert not tones.voices
 print("ALL ROUND 10 TESTS OK")

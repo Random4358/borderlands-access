@@ -347,7 +347,7 @@ class Features:
 
         # Mixing: object sounds step back while the beacon or enemy tones are playing, and the
         # beacon's own target doesn't also play its object sound.
-        from .object_sounds import BEACON_DUCK, COMBAT_DUCK
+        from .object_sounds import BEACON_COMBAT, BEACON_DUCK, COMBAT_DUCK
 
         duck, focus = 1.0, None
         if self.beacon and 0 <= self.poi_index < len(self.pois):
@@ -358,9 +358,13 @@ class Features:
                     focus = actor._path_name()
                 except Exception:
                     focus = None
-        if self.s.radar and self.s.enemy_tones and self.enemies:
+        fighting = bool(self.s.radar and self.s.enemy_tones and self.enemies)
+        if fighting:
             duck *= COMBAT_DUCK
         objects.duck, objects.focus_key = duck, focus
+        from .navigation import beacon as _nb
+
+        _nb.duck = BEACON_COMBAT if fighting else 1.0
         objects.tick(self.s, snap, now)
         try:   # learn where characters walk, for routes (waygraph.py)
             from .waygraph import graph
@@ -593,15 +597,11 @@ class Features:
             self.next_ping[e.key] = now + interval
 
     def best_target(self, max_error_deg: float) -> Enemy | None:
-        best = None
-        for e in self.enemies:
-            if not e.visible:
-                continue
-            if math.degrees(e.rel.aim_error) > max_error_deg:
-                continue
-            if best is None or e.rel.aim_error < best.rel.aim_error:
-                best = e
-        return best
+        """The enemy nearest your crosshair within max_error_deg: one you can see if there is
+        one, otherwise any (whether something is in view is only a best guess)."""
+        near = [e for e in self.enemies if math.degrees(e.rel.aim_error) <= max_error_deg]
+        pool = [e for e in near if e.visible] or near
+        return min(pool, key=lambda e: e.rel.aim_error) if pool else None
 
     def targeting(self, snap: Snapshot, now: float, dt: float) -> None:
         target = self.best_target(15.0)
@@ -643,22 +643,62 @@ class Features:
             k = min(1.0, self.s.aim_assist * 8 * dt)
             game.set_view(snap.pc, int(cur_pitch + dpitch * k), int(cur_yaw + dyaw * k))
 
+    LOCK_PICK_DEG = 60.0   # lock-on picks among enemies this close to your crosshair first
+    LOCK_HIDDEN_SECONDS = 1.5  # a locked enemy out of sight this long gives way to one in sight
+
     def lock_on(self, snap: Snapshot) -> None:
-        """Lock-on aim: while you aim down sights, the view follows one enemy. It stays on the
-        same enemy while you can see it; Back + A switches to the next one."""
-        visible = [e for e in self.enemies if e.visible]
-        if not visible:
+        """Lock-on aim: while you aim down sights, the view follows one enemy.
+
+        * It picks the enemy nearest your crosshair: one you can see if any, otherwise any
+          within 60 degrees, otherwise the nearest of all. (Aiming down sights zooms in, and
+          the game then stops drawing what's off to the side, so "can see" is only a hint.)
+        * Once locked it stays on that enemy while it's alive and in range. If it's out of
+          sight for more than 1.5 seconds and another enemy is in sight, it moves to that one.
+          Back + A switches to the next one.
+        * The first few locks are logged with where the view was set and where it ended up,
+          so it's clear whether the game accepted the turn."""
+        if not self.enemies:
             self.lock_on_key = None
             return
-        target = next((e for e in visible if e.key == self.lock_on_key), None)
+        target = next((e for e in self.enemies if e.key == self.lock_on_key), None)
+        now = time.perf_counter()
+        if target is not None and not target.visible:
+            # Out of sight: keep the lock for a moment (it may only be ducking), then move to
+            # one you can see, if there is one.
+            since = getattr(self, "lock_hidden_since", None) or now
+            self.lock_hidden_since = since
+            if now - since >= self.LOCK_HIDDEN_SECONDS and any(e.visible for e in self.enemies):
+                target, self.lock_on_key = None, None
+        else:
+            self.lock_hidden_since = None
         if target is None:
-            target = min(visible, key=lambda e: e.rel.aim_error)  # the one nearest your crosshair
+            self.lock_hidden_since = None
+            near = [e for e in self.enemies if math.degrees(e.rel.aim_error) <= self.LOCK_PICK_DEG]
+            pool = [e for e in near if e.visible] or near or self.enemies
+            target = min(pool, key=lambda e: (e.rel.aim_error, e.rel.dist))
             self.lock_on_key = target.key
             audio.play("target", snd.ui("lock", self.s.volume))
             if self.s.speak_target:
                 speech.say(f"Locked on {game.display_name(target.actor)}", interrupt=True)
         pitch, yaw = game.aim_rotation(snap.eye, target.pos)
-        game.set_view(snap.pc, pitch, yaw)
+        ok = game.set_view(snap.pc, pitch, yaw)
+        self._log_lock(snap, target, pitch, yaw, ok)
+
+    def _log_lock(self, snap: Snapshot, target: Enemy, pitch: int, yaw: int, ok: bool) -> None:
+        n = getattr(self, "lock_logs", 0)
+        if n >= 8:
+            return
+        self.lock_logs = n + 1
+        from . import trace
+
+        try:
+            r = snap.pc.Rotation
+            got = f"{int(r.Pitch)}, {int(r.Yaw)}"
+        except Exception as e:  # noqa: BLE001
+            got = f"unreadable ({e})"
+        trace.note(f"lock-on: {len(self.enemies)} enemies ({sum(e.visible for e in self.enemies)} in view), "
+                   f"locked {target.key} {target.rel.dist / 100:.0f} m, {math.degrees(target.rel.aim_error):.0f} deg "
+                   f"off; view set to {pitch}, {yaw} ({'accepted' if ok else 'refused'}), now {got}")
 
     # ---------------------------------------------------------------- probes
     def probes(self, snap: Snapshot, now: float) -> None:
