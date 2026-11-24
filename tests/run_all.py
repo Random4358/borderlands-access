@@ -12,7 +12,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-SUITES = ["test_mod.py", "test_menu9.py"] + [f"test_round{i}.py" for i in range(3, 23)]
+SUITES = ["test_mod.py", "test_menu9.py"] + [f"test_round{i}.py" for i in range(3, 24)]
 
 failed = []
 for name in SUITES:
@@ -26,5 +26,7 @@ for name in SUITES:
 leftover = os.path.join(ROOT, "bl2_access", "tab_names.json")
 if os.path.exists(leftover):
     os.remove(leftover)
+import shutil
+shutil.rmtree(os.path.join(ROOT, "bl2_access", "maps"), ignore_errors=True)   # learned paths from the suites
 print(f"\n{len(SUITES) - len(failed)} of {len(SUITES)} suites passed")
 sys.exit(1 if failed else 0)

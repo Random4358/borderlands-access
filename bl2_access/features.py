@@ -344,6 +344,16 @@ class Features:
             return
 
         objects.tick(self.s, snap, now)
+        try:   # learn where characters walk, for routes (waygraph.py)
+            from .waygraph import graph
+
+            graph.tick(snap.pc, snap.pawn, now)
+        except Exception as e:  # noqa: BLE001
+            if not getattr(self, "graph_error", False):
+                self.graph_error = True
+                from . import trace
+
+                trace.note(f"level layout: learning paths failed: {type(e).__name__}: {e}")
         # Until a line test has been seen to hit the floor, check again every 5 s (up to a minute).
         if not game.FLOOR_SEEN and getattr(self, "trace_checks", 0) < 12 and now >= getattr(self, "next_trace_check", 0.0):
             game.trace_self_test(snap.pawn)

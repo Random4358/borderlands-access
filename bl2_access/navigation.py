@@ -36,6 +36,7 @@ from .audio import audio
 
 ON_COURSE_DEG = 7.0     # facing this close to the way to go = "on course"
 NODE_REACHED = 140.0    # uu: close enough to a route point to move on to the next one
+KNOWN_REACHED = 90.0    # uu: the same along known paths (closer, so corners aren't cut)
 ROUTE_EVERY = 0.5       # seconds between asking the game for a route
 STEER_EVERY = 0.25      # seconds between local steering checks
 STEER_REACH = 450.0     # uu: how far ahead each steering direction is tested (~4.5 m)
@@ -68,6 +69,15 @@ def _first(r: Any) -> Any:
     return r[0] if isinstance(r, tuple) else r
 
 
+def _straight(a: tuple, b: tuple, between: list) -> bool:
+    """All the points walked between a and b lie within 40 uu of the line a-b."""
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    n = math.hypot(dx, dy)
+    if n < 1:
+        return True
+    return all(abs((q[0] - a[0]) * dy - (q[1] - a[1]) * dx) / n <= 40 for q in between)
+
+
 class Route:
     """Where to head now on the way to a target."""
 
@@ -93,6 +103,15 @@ class Route:
         self.path_kind = ""                  # "done" (reaches the target) or "partial"
         self.path_cell = 90.0
         self.noted: set[str] = set()
+        self._reset_known()
+
+    def _reset_known(self) -> None:
+        self.known: list = []                # route over learned paths / navigation points
+        self.known_done = False
+        self.known_idx = 0
+        self.known_at = 0.0
+        self.known_version = -1
+        self.known_said = False
 
     def reset(self) -> None:
         self.node, self.source, self.next_update, self.target_key = None, "", 0.0, ""
@@ -100,6 +119,7 @@ class Route:
         self.stuck_since, self.forced_until = None, 0.0
         self.planner, self.replan_at, self.plan_logged = None, 0.0, ""
         self.path, self.path_kind, self.path_cell = [], "", 90.0
+        self._reset_known()
 
     def _note(self, text: str) -> None:
         if text in self.noted:
@@ -126,11 +146,68 @@ class Route:
             return self.node
         if pawn is None:
             return target_pos
+        known = self._known(pawn, eye, target_pos, now)
+        if known is not None and self.known_done:
+            return known                    # a way someone has actually walked, all the way there
         planned = self._planned(pawn, target_pos, now)
         steer = self._steer(pawn, eye, target_pos, now)   # also watches for snags
         if planned is not None and now >= self.forced_until:
             return planned
+        if known is not None:
+            return known                    # known paths as far as they go toward it
         return steer
+
+    # ------------------------------------------------------------ known paths (waygraph.py)
+    def _known(self, pawn: Any, eye: tuple, target_pos: tuple, now: float) -> tuple | None:
+        """Next point along the learned paths / navigation points toward the target."""
+        from .waygraph import graph
+
+        here = (game.location(pawn) if pawn is not None else None) or eye
+        path = self.known
+        off = bool(path) and min(math.dist(here[:2], q[:2]) for q in path[self.known_idx:self.known_idx + 20] or path) > 500
+        # Re-plan when off the path, or every few seconds if the known paths have grown since (a
+        # search can take a moment on a big level, so not every frame).
+        stale = now >= self.known_at + 3.0 and (graph.version != self.known_version or not self.known_done)
+        if now >= self.known_at and (not path or off or stale):
+            self.known_at = now + 1.0
+            self.known_version = graph.version
+            r = graph.route(here, target_pos)
+            if r is None or len(r[0]) < 2:
+                self.known, self.known_done = [], False
+            else:
+                self.known, self.known_done = r
+                self.known_idx = 0
+                length = sum(math.dist(a, b) for a, b in zip(self.known, self.known[1:])) / 100
+                self._note(f"known paths: {'route to the target' if self.known_done else 'part of the way'}, "
+                           f"{length:.0f} m over {len(self.known)} points")
+                if not self.known_said:
+                    self.known_said = True
+                    from .speech import speech
+
+                    if self.known_done:
+                        speech.say(f"Known route, {max(1, round(length))} metres", interrupt=False)
+                    else:
+                        speech.say("Known paths lead part of the way", interrupt=False)
+            path = self.known
+        if not path:
+            return None
+        # how far along you are: the nearest of the next few points
+        window = range(self.known_idx, min(len(path), self.known_idx + 20))
+        if window:
+            self.known_idx = min(window, key=lambda k: math.dist(here[:2], path[k][:2]))
+        while self.known_idx < len(path) and math.dist(here[:2], path[self.known_idx][:2]) < KNOWN_REACHED:
+            self.known_idx += 1
+        if self.known_idx >= len(path):
+            return target_pos if self.known_done else None
+        # Look ahead along the path while it runs straight, so the tone doesn't wobble between
+        # points a metre apart, but never cut a corner people walked around.
+        j = self.known_idx
+        while j + 1 < len(path) and j - self.known_idx < 12 and _straight(here, path[j + 1], path[self.known_idx:j + 1]):
+            j += 1
+        q = path[j]
+        if self.known_done and j == len(path) - 1 and math.dist(q[:2], target_pos[:2]) < 300:
+            return target_pos
+        return (q[0], q[1], q[2] + 60)
 
     def _note_target(self, key: str, eye: tuple, target_pos: tuple) -> None:
         from . import trace

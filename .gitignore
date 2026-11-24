@@ -7,3 +7,4 @@ bl2_access/logs/
 bl2_access/tab_names.json
 bl2_access/helper/python_path.txt
 *.bl2access.bak
+bl2_access/maps/

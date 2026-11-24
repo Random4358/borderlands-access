@@ -219,7 +219,7 @@ if ($CheckOnly) {
         # Copy everything from the package except logs; files the mod writes while you play
         # (logs, learned tab names, python_path.txt) are left in place.
         Get-ChildItem -Path $ModSource -Recurse -File | Where-Object {
-            $_.FullName -notmatch "\\logs\\" -and $_.FullName -notmatch "__pycache__"
+            $_.FullName -notmatch "\\logs\\" -and $_.FullName -notmatch "\\maps\\" -and $_.FullName -notmatch "__pycache__"
         } | ForEach-Object {
             $rel = $_.FullName.Substring($ModSource.Length).TrimStart("\")
             $target = Join-Path $dest $rel

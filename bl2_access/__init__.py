@@ -282,6 +282,13 @@ def on_disable() -> None:
         tones.stop(fade=False)
     except Exception:
         pass
+    try:
+        from .waygraph import graph
+
+        if graph.dirty:
+            graph.save()
+    except Exception:
+        pass
     audio_engine.close()
 
 
