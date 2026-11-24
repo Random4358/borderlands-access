@@ -186,15 +186,15 @@ key("XboxTypeS_LeftShoulder"); key("XboxTypeS_LeftShoulder"); key("XboxTypeS_Lef
 while modmenu.groups[modmenu.gi][0] != "Sound glossary and volumes":
     key("XboxTypeS_RightShoulder")
 items = modmenu.groups[modmenu.gi][1]
-assert len(items) == len(A.SOUNDS) == 31
-assert said[-1][0].endswith("Enemy tone, off target volume, 100 percent. 1 of 31"), said[-1]
+assert len(items) == len(A.SOUNDS) == 33
+assert said[-1][0].endswith("Enemy tone, off target volume, 100 percent. 1 of 33"), said[-1]
 played.clear()
 key("XboxTypeS_DPad_Right"); assert said[-1][0] == "110 percent" and A.GAINS["enemy"] == 1.1 and "ui" in played
 key("XboxTypeS_Y"); assert said[-1][0].startswith("Steady tone for each nearby enemy") and "0 to 300" in said[-1][0]
 for _ in range(25):
     key("XboxTypeS_DPad_Right")
 assert m.SOUND_OPTS["enemy"].value == 300 and A.GAINS["enemy"] == 3.0
-for _ in range(31):
+for _ in range(33):
     key("XboxTypeS_DPad_Left")
 assert m.SOUND_OPTS["enemy"].value == 0 and said[-1][0].startswith("Minimum")
 played.clear(); key("XboxTypeS_A"); assert "ui" in played                # A plays the sound (silent at 0%)
@@ -218,7 +218,7 @@ time.sleep(0.4); replays.clear(); tick(); assert replays == []       # the closi
 # keyboard: Equals opens and closes; arrow keys work inside
 bind = [b for b in m.KEYBINDS if b.key == "Equals"][0]
 bind.callback(); assert modmenu.is_open
-pos = modmenu.ii; key("Down"); assert modmenu.ii == (pos + 1) % 31 and said[-1][0].endswith(f"{modmenu.ii + 1} of 31"), said[-1]  # reopens where you left off
+pos = modmenu.ii; key("Down"); assert modmenu.ii == (pos + 1) % 33 and said[-1][0].endswith(f"{modmenu.ii + 1} of 33"), said[-1]  # reopens where you left off
 time.sleep(0.3); bind.callback(); assert not modmenu.is_open
 # a different modifier (left stick click) works the same way
 m.opt_modifier.value = "Left stick click"; tick()

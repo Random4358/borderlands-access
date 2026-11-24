@@ -100,8 +100,8 @@ for kind in A.LOOPS:
                 join = abs(b[ch] - a[-2 + ch])
                 inside = max(max_step(a, ch), max_step(b, ch))
                 assert join <= inside * 1.05 + 50, (kind, step, behind, ch, join, inside)
-l, r = energy(A.loop_segment("gear", 0, 0.9, 0.8, False)); assert r > 3 * l          # panned right
-l2, r2 = energy(A.loop_segment("gear", 0, -0.9, 0.8, False)); assert l2 > 3 * r2     # panned left
+l, r = energy(A.loop_segment("weapon3", 0, 0.9, 0.8, False)); assert r > 3 * l          # panned right
+l2, r2 = energy(A.loop_segment("weapon3", 0, -0.9, 0.8, False)); assert l2 > 3 * r2     # panned left
 front = sum(energy(A.loop_segment("container", 0, 0, 0.8, False))); back = sum(energy(A.loop_segment("container", 0, 0, 0.8, True)))
 assert back < front                                                                  # muffled behind you
 fi = samples(A.loop_segment("ammo", 0, 0, 0.8, False, 1)); assert max(abs(x) for x in fi[:40]) < 300   # fade in
@@ -182,7 +182,7 @@ def tick():
 tick()
 kinds = {src.key.split(".")[-1]: src.kind for src in OS.sources.values()}
 print("playing:", kinds)
-assert kinds == {"ECHORecorder": "quest", "Money": "money", "BanditSMG": "gear", "Chest1": "container"}, kinds
+assert kinds == {"ECHORecorder": "quest", "Money": "money", "BanditSMG": "weapon1", "Chest1": "container"}, kinds
 assert "Chest2" not in kinds and "Barrel" not in kinds and "FarGun" not in kinds
 # every playing stream is queued ahead, starts with a fade in, and is panned to its object
 for src in OS.sources.values():
@@ -216,7 +216,7 @@ assert cash._p not in OS.sources
 last = samples(cash_st.fed[-1]); assert max(abs(x) for x in last[-40:]) < 300   # faded out, not cut
 OS.next_scan = 0; tick()
 kinds = {src.key.split(".")[-1]: src.kind for src in OS.sources.values()}
-assert kinds.get("AbsorbingShield") == "gear" and len(kinds) == 4, kinds
+assert kinds.get("AbsorbingShield") == "item1" and len(kinds) == 4, kinds
 # opening the chest: its sound stops at the next scan
 chest.bIsUsable = False; OS.next_scan = 0; tick()
 assert chest._p not in OS.sources
@@ -238,7 +238,7 @@ focus.movie = None; OS.next_scan = 0; tick(); assert OS.sources
 m.opt_loot_sounds.value = False; OS.next_scan = 0
 for st in eng.streams: st.play_out(); st.play_out(); st.play_out()
 tick()
-assert all(src.kind not in ("gear", "money", "ammo", "loot") for src in OS.sources.values()), [s.kind for s in OS.sources.values()]
+assert all(src.kind.rstrip("0123456789") not in ("weapon", "item", "money", "ammo", "health", "loot") for src in OS.sources.values()), [s.kind for s in OS.sources.values()]
 for o in ("opt_container_sounds", "opt_interactive_sounds", "opt_quest_item_sounds"):
     getattr(m, o).value = False
 tick(); assert not OS.sources

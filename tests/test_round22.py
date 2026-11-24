@@ -187,5 +187,36 @@ assert not any(k == OS.focus_key for k in OS.sources)
 m.feats.beacon = False; tick(); assert OS.duck == 1.0 and OS.focus_key is None
 assert 0.75 > 0.05 + 0.45   # quietest beacon (far away) vs loudest object sound (right beside you), before volumes
 print("ducking OK")
+
+# --- steady loot sounds: one held tone (only the container keeps its throb)
+for kind, (pattern, _h) in A.LOOPS.items():
+    if kind != "container":
+        assert len({c for c, _a in pattern}) == 1 and len({a for _c, a in pattern}) == 1, kind
+# weapons ring higher the rarer they are; gear uses the same ladder with its own tone colour
+pitches = [A.LOOPS[f"weapon{r}"][0][0][0] for r in range(1, 7)]
+assert pitches == sorted(pitches) and len(set(pitches)) == 6
+assert A.LOOPS["weapon3"][1] != A.LOOPS["item3"][1]
+assert A.preview("weapon") and A.preview("item") and A.preview("health")
+A.GAINS["weapon"] = 2.0; assert A.gain("weapon4") == 2.0; A.GAINS["weapon"] = 1.0
+print("steady sounds and rarity ladder OK")
+
+from bl2_access.object_sounds import rarity_of
+assert rarity_of(NS(RarityLevel=3)) == 3 and rarity_of(NS(GetRarityLevel=lambda: 5)) == 5
+assert rarity_of(NS(RarityLevel=500)) == 6 and rarity_of(NS()) == 1
+# a blue gun, a purple shield, a health vial and an ammo drop each get their own sound
+def drop(name, inv_cls, defn, **kw):
+    a = Actor(name, (300.0, 0.0, 0.0))
+    a.Inventory = NS(Class=cls(inv_cls), Name=name, GetShortHumanReadableName=lambda: name,
+                     DefinitionData=NS(ItemDefinition=NS(Name=defn)), **kw)
+    return a
+blue = drop("BlueGun", "WillowWeapon", "SMG", RarityLevel=3)
+shield = drop("PurpleShield", "WillowShield", "Shield", RarityLevel=4)
+vial = drop("Vial", "WillowUsableItem", "HealthVial_Small")
+bullets = drop("Bullets", "WillowUsableItem", "AmmoDrop_SMG")
+OS.kinds.clear()
+got = {a.Name: OS._classify(a, True) for a in (blue, shield, vial, bullets)}
+print("kinds:", got)
+assert got == {"BlueGun": "weapon3", "PurpleShield": "item4", "Vial": "health", "Bullets": "ammo"}, got
+print("loot kinds OK")
 m.on_disable()
 print("ALL ROUND 22 TESTS OK")

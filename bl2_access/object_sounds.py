@@ -36,9 +36,43 @@ OBJECT_KIND = {
     "Doors and switches": "interactive",
 }
 KIND_NAMES = {
-    "gear": "weapons and gear", "ammo": "ammo and health", "money": "money", "quest": "quest items",
+    "weapon": "weapons", "item": "shields, grenade mods, class mods and relics", "ammo": "ammo",
+    "health": "health", "money": "money", "quest": "quest items", "gear": "gear",
     "container": "containers", "interactive": "doors, switches, vendors and travel", "loot": "other loot",
 }
+HEALTH_WORDS = ("health", "insta", "healing", "medkit")
+_rarity_logged: set = set()
+
+
+def _base(kind: str) -> str:
+    return kind.rstrip("0123456789")
+
+
+def rarity_of(inv: Any) -> int:
+    """1 common .. 5 legendary, 6 pearlescent / seraph / effervescent and above. 1 if unknown.
+    The raw value is logged once per value seen, so the mapping can be checked."""
+    raw = None
+    for get in (lambda: inv.GetRarityLevel(), lambda: inv.RarityLevel, lambda: inv.DefinitionData.RarityLevel):
+        try:
+            v = get()
+            v = v[0] if isinstance(v, tuple) else v
+            raw = int(v)
+            break
+        except Exception:
+            continue
+    if raw not in _rarity_logged:
+        _rarity_logged.add(raw)
+        try:
+            from . import trace
+
+            trace.note(f"loot rarity: {game.class_name(inv)} {game.display_name(inv)} rarity value {raw}")
+        except Exception:
+            pass
+    if raw is None or raw < 1:
+        return 1
+    if raw >= 6:   # BL2 uses large numbers (500 and up) for pearlescent, seraph and the like
+        return 6
+    return raw
 
 
 @dataclass
@@ -94,20 +128,40 @@ class ObjectSounds:
         if hit is None:
             cat, name = categorize_pickup(actor) if is_pickup else categorize_object(actor)
             table = PICKUP_KIND if is_pickup else OBJECT_KIND
-            hit = (table.get(cat or "", ""), name)
+            kind = table.get(cat or "", "")
+            if is_pickup and kind in ("gear", "ammo"):
+                kind = self._refine(actor, kind, name)
+            hit = (kind, name)
             self.kinds[key] = hit
         return hit[0]
 
+    def _refine(self, actor: Any, kind: str, name: str) -> str:
+        """gear -> weapon<rarity> or item<rarity>; ammo -> ammo or health."""
+        from .features import _definition_name
+
+        try:
+            inv = actor.Inventory
+        except Exception:
+            inv = None
+        if kind == "ammo":
+            hay = f"{game.class_name(inv)} {_definition_name(inv) if inv is not None else ''} {name}".lower()
+            return "health" if any(w in hay for w in HEALTH_WORDS) else "ammo"
+        if inv is None:
+            return "item1"
+        family = "weapon" if game.class_name(inv).startswith("WillowWeapon") else "item"
+        return f"{family}{rarity_of(inv)}"
+
     def _wanted(self, s: Any, snap: Any) -> list[tuple[float, str, Any, str]]:
         enabled = {
-            "gear": s.loot_sounds, "ammo": s.loot_sounds, "money": s.loot_sounds, "loot": s.loot_sounds,
+            "weapon": s.loot_sounds, "item": s.loot_sounds, "ammo": s.loot_sounds, "health": s.loot_sounds,
+            "money": s.loot_sounds, "loot": s.loot_sounds,
             "quest": s.quest_item_sounds, "container": s.container_sounds, "interactive": s.interactive_sounds,
         }
         found: list[tuple[float, str, Any, str]] = []
 
         def consider(actor: Any, is_pickup: bool) -> None:
             kind = self._classify(actor, is_pickup)
-            if not kind or not enabled.get(kind):
+            if not kind or not enabled.get(_base(kind)):
                 return
             pos = game.location(actor)
             if pos is None:
@@ -229,7 +283,7 @@ class ObjectSounds:
             return "No object sounds playing"
         counts: dict[str, int] = {}
         for src in self.sources.values():
-            counts[src.kind] = counts.get(src.kind, 0) + 1
+            counts[_base(src.kind)] = counts.get(_base(src.kind), 0) + 1
         return "Object sounds: " + ", ".join(f"{n} {KIND_NAMES[k]}" for k, n in counts.items())
 
 
