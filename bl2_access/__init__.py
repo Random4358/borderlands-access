@@ -106,6 +106,50 @@ def _test(_: Any = None) -> None:
 
 opt_test = ButtonOption("Test speech and sounds", on_press=_test)
 
+# Help text for every setting: read after the setting's name and value in the accessibility
+# settings (and by Y there), and shown in the mod manager's own menu. Every option must have
+# one (the tests check).
+TRACE_NOTE = (" This depends on the game's line tests; if they don't work in your setup it stays silent rather"
+              " than guess.")
+HELP = {
+    opt_volume: "Master volume for every sound the mod makes: object sounds, enemy tones, the beacon and menu sounds. It doesn't change the game's own sounds or your screen reader.",
+    opt_test: "Plays a few test sounds from the left, centre and right, and says which speech output is working.",
+    opt_modifier: "Hold this button and press another one for the mod's shortcuts, for example modifier and B for your status. Press it three times quickly to open these settings. A single tap still does its normal job in the game.",
+    opt_menu_sounds: "Short sounds when you move, select or go back in the game's menus and in these settings.",
+    opt_menu_announce: "Says the name of each menu or screen as it opens, for example Options or Inventory.",
+    opt_menu_reader: "Reads the highlighted entry aloud as you move through the game's menus, with its position, for example 2 of 6.",
+    opt_menu_desc: "Reads each entry's help text after its name: in the game's options menus, and here, where every setting's explanation follows its name and value. Move on to skip it. Y repeats it here.",
+    opt_enemy_volume: "How loud enemy sounds are compared with the mod's other sounds.",
+    opt_radar_range: "How far away, in metres, an enemy can be and still make a sound.",
+    opt_radar_max: "The most enemies that make a sound at the same time. The nearest ones are chosen.",
+    opt_radar_hidden: "When on, enemies behind cover still make a sound, muffled. When off, only enemies you can see do.",
+    opt_all_ai: "If the game can't say which characters are hostile, treat every computer-controlled character as an enemy so none are missed. Friendly characters may then sound like enemies.",
+    opt_targeting: "In the radar beep style: a chime when your crosshair lands on an enemy, ticking while it stays there, and a falling tone when it leaves. In the steady tone style the enemy's own tone changes instead.",
+    opt_speak_target: "Says the enemy's name when your crosshair lands on it or lock-on picks it, for example: Locked on Bandit.",
+    opt_aim_assist: "How strongly your view is pulled toward the enemy nearest your crosshair while you aim down sights. 0 is no pull, 100 the strongest. Only used when aiming help is set to Aim assist.",
+    opt_walls: "Soft clicks when a wall is close ahead of you, or to your left or right." + TRACE_NOTE,
+    opt_wall_dist: "How close, in metres, a wall has to be before it clicks.",
+    opt_npc_range: "How far away, in metres, a friendly character can be and still chime.",
+    opt_npc_max: "The most friendly characters that chime at the same time. The nearest ones are chosen.",
+    opt_npc_talk: "Says 'Talk to', the character's name and the button to press when you're right next to someone and facing them.",
+    opt_lock_nav: "When on, hold the modifier and click the right stick (or press the apostrophe key) to turn and face the way to your objective: the beacon's target if you've picked one, otherwise the nearest marker of your tracked mission. It follows known walking paths when there are any, and when you're close, looks right at the thing so the game's Use works. When off, that button says your heading.",
+    opt_ledges: "A falling tone when there's a drop ahead of you." + TRACE_NOTE,
+    opt_loot_sounds: "Sounds for loot on the ground: weapons, shields and other gear, ammo, health, money and other items each have their own. They're panned to where the item is and get louder as you get closer. Loot sound style chooses steady tones or the game's own drop sounds.",
+    opt_container_sounds: "A woody low throb for chests, lockers and other containers you haven't opened yet.",
+    opt_interactive_sounds: "A steady hollow tone for doors, switches, vendors and fast travel stations.",
+    opt_quest_item_sounds: "A steady two-note chord for quest items and mission objects. These always get a sound before other things.",
+    opt_object_range: "How far away, in metres, an object can be and still make a sound.",
+    opt_object_max: "The most object sounds playing at once. Quest items come first, then the nearest things.",
+    opt_object_volume: "How loud object sounds are compared with the mod's other sounds. The beacon is always louder.",
+    opt_speak_blocked: "When you push against something and don't move, says what's in the way and which side is open, for example: Blocked, open to the left. Or: Low obstacle, jump over." + TRACE_NOTE,
+    opt_jump: "A rising boing when there's an obstacle you can jump over, or a gap you can jump across." + TRACE_NOTE,
+    opt_low_health: "A heartbeat when your health falls below the threshold, faster when it's very low.",
+    opt_low_health_pct: "The heartbeat starts when your health is below this percentage of your maximum.",
+}
+for _opt, _text in HELP.items():
+    _opt.description = _text
+
+
 # Sound glossary: one volume per sound, 0 to 300%. The descriptions say what each sound means.
 SOUND_OPTS = {
     key: SliderOption(f"{name} volume", 100, 0, 300, step=10, description=f"{desc} Volume in percent, 0 to 300.")
@@ -171,6 +215,12 @@ def sync_settings() -> None:
     menus.announce = opt_menu_announce.value
     reader.enabled = opt_menu_reader.value
     reader.read_descriptions = opt_menu_desc.value
+    try:
+        from .mod_menu import modmenu as _mm
+
+        _mm.auto_describe = lambda: bool(opt_menu_desc.value)
+    except Exception:
+        pass
 
 
 def _on_toggle(attr: str, value: bool) -> None:

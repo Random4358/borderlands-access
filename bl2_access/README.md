@@ -185,7 +185,7 @@ are quiet, but the game isn't paused, so open it somewhere safe.
 | Bumpers (Q / E) | Previous / next group |
 | D-pad left / right (arrow keys) | Change the value. Sound volumes play the sound at the new volume |
 | A (Enter or Space) | Switch on or off, press a button, or play the sound |
-| Y (Tab) | Describe the setting, with its range or choices |
+| Y (Tab) | Describe the setting again, with its range or choices. (Each setting's explanation is also read automatically after its name and value; moving on cuts it off. Turn that off with Read option descriptions.) |
 | X (R) | Reset to the default |
 | B, or the modifier button (Escape) | Close and save |
 

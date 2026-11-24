@@ -91,6 +91,7 @@ def call(cls, fn, obj, kind=Type.PRE, **args):
 # ================================================================ round 11: spoken settings menu, triple press, sound glossary
 from bl2_access import audio as A
 from bl2_access.mod_menu import modmenu
+m.opt_menu_desc.value = False   # (help text after each entry is tested in round 23)
 from unrealsdk.hooks import Block
 
 replays = []

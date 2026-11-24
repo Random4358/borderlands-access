@@ -8,7 +8,8 @@ mod's world sounds are quiet so you can hear the sound previews.
   Bumpers (Q / E)                       previous / next group
   D-pad left / right (arrow keys)       change the value (sound volumes play a preview)
   A (Enter or Space)                    toggle, press a button, or play the sound
-  Y (Tab)                               describe the setting
+  Y (Tab)                               describe the setting again, with its range or choices
+                                        (the description is also read after each entry)
   X (R)                                 reset to its default
   B, or the modifier button (Escape)    close; settings are saved
 
@@ -63,6 +64,7 @@ class ModMenu:
     def configure(self, options: list[Any], sound_options: dict[str, Any],
                   save: Callable[[], None], volume: Callable[[], float]) -> None:
         self.options = options
+        self.auto_describe: Callable[[], bool] = getattr(self, "auto_describe", lambda: True)
         self.save = save
         self.volume = volume
         notes = {k: d for k, _n, d in snd.SOUNDS}
@@ -99,6 +101,7 @@ class ModMenu:
         speech.say(f"Accessibility settings. {len(self.groups)} groups. "
                    f"Up and down to move, left and right to change, bumpers for groups, B to close. "
                    + self._group_text() + ". " + self._item_text())
+        self._tooltip()
 
     def close(self) -> None:
         if not self.is_open:
@@ -141,9 +144,20 @@ class ModMenu:
         n = len(self.groups[self.gi][1])
         return f"{name_of(opt)}, {self.value_text(opt)}. {self.ii + 1} of {n}"
 
+    def _note(self, opt: Any) -> str:
+        return self.sound_notes.get(id(opt)) or str(getattr(opt, "description", "") or "")
+
+    def _tooltip(self) -> None:
+        """Read the setting's explanation after its name and value (queued, so moving on to the
+        next setting cuts it off)."""
+        if self.auto_describe():
+            note = self._note(self.current)
+            if note:
+                speech.say(note, interrupt=False)
+
     def describe(self) -> None:
         opt = self.current
-        note = self.sound_notes.get(id(opt)) or str(getattr(opt, "description", "") or "")
+        note = self._note(opt)
         extra = ""
         k = kind(opt)
         if k == "SliderOption":
@@ -225,6 +239,7 @@ class ModMenu:
         self.ii = (self.ii + step) % n
         audio.play("ui", snd.ui("move", self.volume()))
         speech.say(self._item_text())
+        self._tooltip()
         if id(self.current) in self.sound_keys:
             self._preview(self.current)
 
@@ -233,6 +248,7 @@ class ModMenu:
         self.ii = 0
         audio.play("ui", snd.ui("move", self.volume()))
         speech.say(self._group_text() + ". " + self._item_text())
+        self._tooltip()
 
     def key(self, key: str) -> None:
         """A key pressed while the menu is open."""

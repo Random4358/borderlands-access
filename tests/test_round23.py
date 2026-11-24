@@ -259,5 +259,27 @@ assert said[-1][0] == ("Health 87 of 110. Shield 40 of 70. Bandit SMG, 18 of 24 
 assert any(n.startswith("status readout values:") for n in notes)
 assert m.controls.COMBOS["XboxTypeS_X"] == "repeat"
 print("status readout OK")
+
+# --- every setting explains itself, and the settings menu reads it after the name and value
+from bl2_access.mod_menu import modmenu, kind
+missing = []
+for group in m.OPTIONS:
+    for opt in getattr(group, "children", [group]):
+        if not str(getattr(opt, "description", "") or "").strip():
+            missing.append(opt.identifier)
+print("settings without help text:", missing)
+assert not missing, missing
+m.opt_menu_desc.value = True
+said.clear(); modmenu.open()
+entry, tip = said[-2][0], said[-1]
+assert "1 of" in entry and tip[1] is False and tip[0] == m.opt_volume.description, said[-2:]
+said.clear(); modmenu.key("XboxTypeS_DPad_Down")
+assert said[-2][0].startswith(modmenu.current.identifier) and said[-1][0] == modmenu.current.description, said[-2:]
+# switched off: just the entry
+m.opt_menu_desc.value = False; said.clear(); modmenu.key("XboxTypeS_DPad_Down")
+assert len(said) == 1 and said[0][0].startswith(modmenu.current.identifier), said
+m.opt_menu_desc.value = True
+modmenu.close()
+print("setting help text OK")
 m.on_disable()
 print("ALL ROUND 23 TESTS OK")
