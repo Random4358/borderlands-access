@@ -49,7 +49,8 @@ LEAD = 0.1              # seconds of beacon tone queued ahead
 BODY = 35.0             # uu: half your width, for "can you walk straight there" checks
 FAR = 3500.0           # uu: beyond this the planner uses a coarse grid (35 m)
 PLAN_CELLS = 2500      # planner search limit, doubled (up to 4x) when a partial route stalls
-PLAN_BUDGET = 120      # line traces the planner may use per frame
+PLAN_BUDGET = 2000     # line traces the planner may use per frame at most
+PLAN_SECONDS = 0.004   # and the time it may take per frame (a search from far off needs many)
 PROGRESS_SECONDS = 8.0 # moving without getting further along the route this long = re-plan
 BEACON_BASE = 56        # 700 Hz at the same height as you
 
@@ -124,7 +125,8 @@ class Route:
         self.known_at = 0.0
         self.known_version = -1
         self.known_said = False
-        self.known_aim = 0                   # the point the beacon aims at: only ever moves forward
+        self.known_aim = 0
+        self.known_spot: tuple | None = None  # a spot at the target's height the known route leads to                   # the point the beacon aims at: only ever moves forward
 
     def reset(self) -> None:
         self.node, self.source, self.next_update, self.target_key = None, "", 0.0, ""
@@ -133,6 +135,8 @@ class Route:
         self.planner, self.replan_at, self.plan_logged = None, 0.0, ""
         self.path, self.path_kind, self.path_cell = [], "", 90.0
         self.path_moves, self.climb_told = [], set()
+        self.climb_wanted = False    # someone's waiting to hear whether there's a way up
+        self.search_from: tuple | None = None
         self._reset_known()
 
     def _note(self, text: str) -> None:
@@ -186,6 +190,16 @@ class Route:
             self.known_at = now + 1.0
             self.known_version = graph.version
             r = graph.route(here, target_pos)
+            self.known_spot = None
+            if r is not None and not r[1] and target_pos[2] - here[2] > 200:
+                # Known paths don't reach a raised target itself; but if someone has stood at its
+                # height close by (on the ledge or floor it's on), lead there first.
+                spot = graph.height_spot(target_pos)
+                r2 = graph.route(here, spot) if spot is not None else None
+                if r2 is not None and r2[1] and len(r2[0]) >= 2:
+                    r, self.known_spot = r2, spot
+                    self._note(f"known paths: reach the target's height {math.dist(spot[:2], target_pos[:2]) / 100:.0f} m "
+                               f"from it, at ({spot[0]:.0f}, {spot[1]:.0f}, {spot[2]:.0f}); leading there")
             if r is None or len(r[0]) < 2:
                 self.known, self.known_done = [], False
             else:
@@ -198,7 +212,9 @@ class Route:
                     self.known_said = True
                     from .speech import speech
 
-                    if self.known_done:
+                    if self.known_spot is not None:
+                        speech.say(f"Known route up to its height, {max(1, round(length))} metres", interrupt=False)
+                    elif self.known_done:
                         speech.say(f"Known route, {max(1, round(length))} metres", interrupt=False)
                     else:
                         speech.say("Known paths lead part of the way", interrupt=False)
@@ -313,15 +329,23 @@ class Route:
         # A route that reaches the target is kept while you follow it; re-planned only when you leave
         # it, stop getting further along it, or get snagged (those set replan_at to 0).
         due = now >= self.replan_at and (self.path_kind != "done" or self.replan_at == 0.0)
-        if pl.state != "running" and (not path or due or off_route or at_end or grain_changed):
+        # A search still running from much further away than you are now is out of date: start
+        # again from here. (A tester stood 3 m from a raised marker while the search
+        # begun 70 m back was still going.)
+        stale = (pl.state == "running" and self.search_from is not None
+                 and self.search_from[2] - gap > max(1500.0, 0.6 * self.search_from[2]))
+        if stale:
+            self._note("route planner: you've moved on since the search began; searching again from here")
+        if stale or (pl.state != "running" and (not path or due or off_route or at_end or grain_changed)):
             # Start from the ground actually under you (measured), not an estimate from your height.
             ground = game.ground_z(pawn, loc[0], loc[1], loc[2])
             start = (loc[0], loc[1], ground if ground is not None else feet)
             self.start_note = (f"you at ({loc[0]:.0f}, {loc[1]:.0f}), body {loc[2]:.0f}, estimated feet {feet:.0f}, "
                                f"measured ground {'none' if ground is None else f'{ground:.0f}'}")
             pl.start(start, target_pos, cell=cell, max_cells=self.limit)
+            self.search_from = (here[0], here[1], gap)
             self.replan_at = now + 8.0
-        pl.step(PLAN_BUDGET)
+        pl.step(PLAN_BUDGET, PLAN_SECONDS)
         if pl.runs != self.runs_seen and pl.state in ("done", "partial", "failed"):
             self.runs_seen = pl.runs
             self._take_plan(pl, here, now)
@@ -401,6 +425,7 @@ class Route:
                 self._note(f"route planner: searching a bigger area ({self.limit} points)")
             if not self.path:
                 self.path_kind = ""
+            self._climb_news(found=False)
             return
         # A partial route that gets no closer than the last one: search a bigger area next time.
         if pl.state == "partial":
@@ -425,12 +450,56 @@ class Route:
         self.watch = None
         self._note(f"route planner: {'path to the target' if pl.state == 'done' else 'partial path toward the target'}, "
                    f"{length:.0f} m, {pl.cells_searched} points searched, grid {pl.cell / 100:.1f} m")
-        if not self.announced:
+        if self.climb_wanted:
+            self._climb_news(found=pl.state == "done")
+        elif not self.announced:
             self.announced = True
             if pl.state == "done":
                 speech.say(f"Route found, {max(1, round(length))} metres", interrupt=False)
             else:
                 speech.say("Heading toward it, searching for the way in", interrupt=False)
+
+    def _climb_news(self, found: bool) -> None:
+        """Tell whoever is waiting below a raised target whether a way up was found."""
+        if not self.climb_wanted:
+            return
+        from .speech import speech
+
+        self.climb_wanted = False
+        if found:
+            speech.say("Way up found. " + self.climb_summary(), interrupt=False)
+        else:
+            speech.say("No way up found from here. " + self.no_way_hint(), interrupt=False)
+
+    def climb_summary(self) -> str:
+        """How the planned route gets up there: its length and jumps."""
+        length = sum(math.dist(a[:2], b[:2]) for a, b in zip(self.path, self.path[1:])) / 100
+        jumps = list(getattr(self, "path_moves", [])).count("jump")
+        how = (f", with {jumps} jump{'s' if jumps != 1 else ''} up. You'll hear Jump up here at each" if jumps
+               else ", up a slope or stairs")
+        return f"{max(1, round(length))} metres{how}. Follow the beacon"
+
+    def no_way_hint(self) -> str:
+        if not game.FLOOR_SEEN:
+            return "The mod's line tests aren't working yet, so it can't search. Try again in a moment"
+        return ("It may be reached from further away, by a ladder or lift, or from another side. "
+                "The search starts again as you move")
+
+    def height_help(self, target_pos: tuple, up: bool = True) -> str:
+        """For a raised (or lowered) target you're right under: what the mod knows about the way
+        there, instead of leaving you to find it."""
+        if self.known_spot is not None and self.known_done:
+            d = math.dist(self.known_spot[:2], target_pos[:2]) / 100
+            return f"Learned paths reach its height {max(1, round(d))} metres from it. The beacon leads there"
+        if self.path_kind == "done" and self.path:
+            return f"The beacon leads {'up' if up else 'down'}: " + self.climb_summary()
+        self.climb_wanted = True
+        if not game.FLOOR_SEEN:
+            return f"The mod can't search for a way {'up' if up else 'down'} until its line tests work. You'll hear when it can"
+        pl = self.planner
+        if pl is None or pl.state != "running":
+            self.replan_at = 0.0        # search again from right here
+        return f"Searching for a way {'up' if up else 'down'}. You'll hear when one is found"
 
     def _watch_progress(self, here: tuple, now: float) -> None:
         """Re-plan if you keep moving but don't get any further along the route."""

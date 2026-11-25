@@ -83,6 +83,11 @@ name, how many points you have in it out of the maximum, and its description. F8
   plans its own: it searches the area around you, a metre at a time, testing with line traces where you can walk, and
   finds the way through. It takes well under a second, and the search is spread over frames so the game doesn't
   stutter. The beacon then leads you along that route. When it has one it says "Route found" and the length. If it can't see the whole way yet, for example to a target inside a building whose door it hasn't found, it says "Heading toward it, searching for the way in", leads you as close as it can, and searches a wider area from there. Far from the target it plans in larger steps, and within 35 m in one-metre steps that find doorways. It also handles stairs. If you keep walking without getting any further along the route, or get snagged, it says "Recalculating" and plans again from where you are.
+- **Targets above or below you**: the route climbs stairs and ramps, jumps onto ledges ("Jump up here") and drops off
+  edges ("Drop down here"). A marker on a ledge or an upper floor only counts as reached at its height. If you end up
+  right underneath one, the mod says how high it is and what it knows about the way up: the route it found (its length
+  and how many jumps), or where learned paths reach that height (and the beacon leads there), or that it's searching
+  and will tell you what it finds.
 
 **Lock-on navigation** (off by default; Navigation options, or the accessibility settings) turns you to face the way to go
 when you hold the modifier and click the right stick, or press the apostrophe key. It turns toward the beacon's target if

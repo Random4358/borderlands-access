@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import heapq
 import math
+import time
 from typing import Callable, Iterator
 
 Point = tuple[float, float, float]
@@ -76,15 +77,22 @@ class GridPlanner:
         self.rejects = {"no floor": 0, "knee": 0, "chest": 0}
         self._job = self._search(feet, goal)
 
-    def step(self, budget: int = 120) -> str:
-        """Do up to `budget` line traces of searching. Returns the state."""
+    def step(self, budget: int = 120, seconds: float | None = None, minimum: int = 120) -> str:
+        """Do up to `budget` line traces of searching, or with `seconds`, at least `minimum` and
+        then as many more as fit in that time (still at most `budget`). Returns the state."""
         if self.state != "running" or self._job is None:
             return self.state
         self._spent = 0
-        self._budget = budget
+        deadline = time.perf_counter() + seconds if seconds else None
         try:
-            while self._spent < budget:
-                next(self._job)
+            if deadline is None:
+                self._budget = budget
+                while self._spent < budget:
+                    next(self._job)
+            else:
+                while self._spent < budget and (self._spent < minimum or time.perf_counter() < deadline):
+                    self._budget = min(budget, self._spent + 30)
+                    next(self._job)
         except StopIteration:
             self._job = None
         return self.state

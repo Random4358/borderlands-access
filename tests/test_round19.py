@@ -1,4 +1,4 @@
-﻿"""Tests for: character descriptions, silence in menus, scanner categories."""
+"""Tests for: character descriptions, silence in menus, scanner categories."""
 import enum, sys, time, types
 from types import SimpleNamespace as NS
 
@@ -160,7 +160,11 @@ said.clear(); notes.clear()
 ok, frames, worst, r = walk(w, Pawn(w, (0.0, 0.0)), target, "Cabinet")
 print(f"building: arrived={ok} in {frames} frames ({frames / 30:.0f} s), most traces in a frame: {worst}")
 assert ok, (frames, notes[-6:])
-assert any("grid 1.8 m" in n for n in notes) and any("grid 0.9 m" in n for n in notes), notes   # coarse, then fine
+# coarse far off, then fine close up (or, once you're much closer than the coarse search began, a fresh
+# fine search from where you are)
+assert (any("grid 1.8 m" in n for n in notes) or any("searching again from here" in n for n in notes)) \
+    and any("grid 0.9 m" in n for n in notes), notes
+assert frames < 1200, frames   # 56 s before the stale-search restart, 26 s with it
 assert said and said[0][0].startswith(("Route found", "Heading toward it")), said
 assert worst <= NAV.PLAN_BUDGET + 120, worst              # planner budget plus following/steering checks
 print("into a building from far away OK")

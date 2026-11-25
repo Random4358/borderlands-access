@@ -364,6 +364,18 @@ class WayGraph:
                         best, best_d = i, d
         return best
 
+    def height_spot(self, goal: tuple, radius: float = 1500.0) -> tuple | None:
+        """The known point nearest across the floor to `goal` that's at about its height (where
+        someone has stood level with a raised marker), within `radius`."""
+        best, best_d = None, radius
+        for q in self.pos:
+            if not -150.0 <= goal[2] - q[2] <= 200.0:
+                continue
+            d = math.hypot(q[0] - goal[0], q[1] - goal[1])
+            if d < best_d:
+                best, best_d = q, d
+        return (best[0], best[1], best[2]) if best is not None else None
+
     def route(self, start: tuple, goal: tuple) -> tuple[list[tuple], bool] | None:
         """Known walkable points from near `start` toward `goal`, and whether they reach it.
         None if you're not near any known point yet."""

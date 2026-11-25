@@ -159,6 +159,70 @@ path, done = g.route((0.0, 0.0, 90.0), (600.0, 0.0, 150.0))   # marker at about 
 assert done
 print("known paths and height OK")
 
+# --- 5b. someone has stood at the marker's height a few metres away (up a ramp): the known route
+# leads there instead of to the spot right underneath it (the Find new gear marker)
+g = W.WayGraph(); g.map = "Glacial_P"
+t = 0.0
+for k in range(12):                                          # along the ground, under the marker at x 600
+    g.record(1, (k * 100.0, 0.0, 90.0), t); t += 0.25
+for k in range(1, 10):                                       # then up a ramp to the side, to the marker's level
+    g.record(1, (1100.0 - k * 60.0, k * 60.0, 90.0 + k * 34.0), t); t += 0.25
+spot = g.height_spot((600.0, 0.0, 400.0))
+assert spot is not None and 200 <= spot[2] and math.dist(spot[:2], (600.0, 0.0)) < 1500, spot
+W.graph.__dict__.update(g.__dict__)
+G_ = NAV.game
+saved_floor = G_.FLOOR_SEEN; G_.FLOOR_SEEN = False
+class Pw:
+    def __init__(s, x, y, z): s.Location = NS(X=x, Y=y, Z=z); s.Velocity = NS(X=0.0, Y=0.0, Z=0.0); s.Acceleration = NS(X=0.0, Y=0.0, Z=0.0); s.CylinderComponent = NS(CollisionHeight=90); s.BaseEyeHeight = 60; s.Controller = None
+r = NAV.Route(); said.clear(); notes.clear()
+p = r.next_point(NS(), (0.0, 0.0, 150.0), (600.0, 0.0, 400.0), None, "Gear", 0.0, Pw(0.0, 0.0, 90.0))
+print("raised marker, known route:", [n for n in notes if "height" in n])
+assert r.known_done and r.known_spot is not None, (r.known_done, r.known_spot)
+assert any("Known route up to its height" in s for s, _i in said), said
+help_text = r.height_help((600.0, 0.0, 400.0))
+assert "Learned paths reach its height" in help_text and "beacon leads there" in help_text, help_text
+# --- 5c. no known way: the mod says it's searching, and later what it found
+r = NAV.Route(); said.clear()
+assert "can't search" in r.height_help((600.0, 0.0, 400.0)) and r.climb_wanted
+G_.FLOOR_SEEN = True
+r.climb_wanted = False
+assert r.height_help((600.0, 0.0, 400.0)).startswith("Searching for a way up") and r.climb_wanted
+pl = NS(state="done", path=[(0.0, 0.0, 0.0), (300.0, 0.0, 0.0), (390.0, 0.0, 100.0), (600.0, 0.0, 100.0)],
+        moves=["walk", "walk", "jump", "walk"], cell=90.0, cells_searched=50, best_gap=0.0, rejects={})
+r.limit, r.last_gap = NAV.PLAN_CELLS, None
+r._take_plan(pl, (0.0, 0.0, 0.0), 1.0)
+print("way up:", said[-1][0])
+assert said[-1][0].startswith("Way up found. 6 metres, with 1 jump up") and not r.climb_wanted, said
+assert r.height_help((600.0, 0.0, 400.0)).startswith("The beacon leads up: 6 metres")
+assert r.height_help((600.0, 0.0, -400.0), up=False).startswith("The beacon leads down")
+r.climb_wanted = True
+r._take_plan(NS(state="failed", path=[], moves=[], cell=90.0, cells_searched=900, best_gap=0.0,
+                rejects={"no floor": 1, "knee": 2, "chest": 3}), (0.0, 0.0, 0.0), 2.0)
+assert said[-1][0].startswith("No way up found from here"), said[-1]
+G_.FLOOR_SEEN = saved_floor
+print("raised marker guidance OK")
+
+# --- 5d. a search begun far away is started again once you're much closer
+class Busy:
+    def __init__(s): s.state = "running"; s.cell = 180.0; s.starts = []; s.runs = 0
+    def start(s, *a, **k): s.starts.append(a); s.state = "running"
+    def step(s, *a, **k): return s.state
+r = NAV.Route(); G_.FLOOR_SEEN = True; notes.clear()
+r.planner = Busy(); r.path, r.path_kind, r.limit, r.last_gap = [], "", NAV.PLAN_CELLS, None
+r.runs_seen, r.watch, r.announced = 0, None, False
+r.search_from = (0.0, 0.0, 7000.0)                           # begun 70 m from the target
+orig_loc, orig_feet, orig_ground = G_.location, G_.feet_z, G_.ground_z
+G_.location = lambda a: (a.Location.X, a.Location.Y, a.Location.Z)
+G_.feet_z = lambda a: a.Location.Z - 90
+G_.ground_z = lambda a, x, y, z: z - 90
+r._planned(Pw(3000.0, 0.0, 90.0), (7000.0, 0.0, 300.0), 5.0)     # 40 m away now: keep going
+assert not r.planner.starts
+r._planned(Pw(6700.0, 0.0, 90.0), (7000.0, 0.0, 300.0), 6.0)     # 3 m away: search again from here
+assert len(r.planner.starts) == 1 and any("searching again from here" in n for n in notes), notes
+assert abs(r.search_from[2] - 300.0) < 1
+G_.location, G_.feet_z, G_.ground_z, G_.FLOOR_SEEN = orig_loc, orig_feet, orig_ground, saved_floor
+print("stale search restarted OK")
+
 # --- 6. on the route, the spot where you need to jump is announced once
 r = NAV.Route()
 r.path = [(0.0, 0.0, 0.0), (90.0, 0.0, 0.0), (180.0, 0.0, 100.0), (270.0, 0.0, 100.0)]

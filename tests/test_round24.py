@@ -1,4 +1,4 @@
-﻿"""Tests for: calling the engine's line test directly."""
+"""Tests for: calling the engine's line test directly."""
 import enum, sys, time, types
 from types import SimpleNamespace as NS
 
@@ -362,7 +362,7 @@ F_.pois = [FE.POI("Find new gear", None, "Quest objectives", pos=(100.0, 0.0, 66
 F_.poi_index = 0; F_.beacon = True; said.clear()
 F_.beacon_tick(snap, 1.0)
 print("ledge:", said[-1][0])
-assert F_.beacon and said[-1][0].startswith("Find new gear is about 3 metres above you. Look for a way up"), said
+assert F_.beacon and (said[-1][0].startswith("Find new gear is about 3 metres above you. ") and "way up" in said[-1][0] and "Look for" not in said[-1][0]), said
 assert "Chest" in said[-1][0], said[-1]
 n = len(said); F_.beacon_tick(snap, 1.1); assert len(said) == n      # said once
 # up on the ledge: arrived, and told what's there

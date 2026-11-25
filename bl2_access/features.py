@@ -1124,8 +1124,8 @@ class Features:
                 self.height_told = tag
                 where = "above" if rise > 0 else "below"
                 here = self.things_at(snap, pos)
-                speech.say(f"{poi.name} is about {max(1, round(abs(rise) / 100))} metres {where} you. "
-                           f"Look for a way {'up' if rise > 0 else 'down'}, such as stairs, a ramp or a ledge to climb"
+                way = nav_beacon.route.height_help(pos, up=rise > 0)
+                speech.say(f"{poi.name} is about {max(1, round(abs(rise) / 100))} metres {where} you. {way}"
                            + (f". Near it: {here}" if here else ""))
             return
         self.beacon = False

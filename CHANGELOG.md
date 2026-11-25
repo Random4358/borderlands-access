@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Markers above you** (Find new gear): instead of "Look for a way up", the mod says what it knows: the way up it found
+  (its length and jumps, and the beacon leads there), or where learned paths reach the marker's height nearby (and the
+  beacon leads there first), or that it's still searching and will say what it finds.
+- **Route searches keep up with you**: a search begun far away is started again from where you are once you're much
+  closer (a tester stood 3 m from a raised marker while the search begun 70 m back was still going). Searches also get
+  more line tests per frame, up to 4 ms' worth, so long searches finish sooner.
 - **Cutscene descriptions**: what happens on screen is described during cutscenes, between the lines of dialogue.
   Written so far for the opening intro and the Marcus, Scooter, Tannis and Dr. Zed introduction videos, from frames of
   the game's own video files. Videos are timed from when they start; scenes the engine plays live are timed by their own
