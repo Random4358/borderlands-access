@@ -962,6 +962,16 @@ class Features:
                                pos=first.pos if first else None))
         for w in points:
             entries.append(POI(w.label, w.ptr, QUEST, pos=w.pos))
+        try:   # once per objective: what it needs, for the log (logs/objectives.txt)
+            from . import trace
+
+            act = next((w for w in points if w.active and w.pos is not None), None)
+            if act is not None:
+                written = quests.record_objective(snap.pc, act.label, act.pos)
+                if written:
+                    trace.note(f"objective '{act.label}': recorded what's around it to {written}")
+        except Exception:
+            pass
         if info is not None and info.turn_in_to:
             for person in self.categories.get("People", []):
                 if quests.matches_person(person.name, info.turn_in_to):

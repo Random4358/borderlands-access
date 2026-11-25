@@ -443,6 +443,12 @@ def waypoints(pc: Any) -> list[Waypoint]:
             continue
         if actor is not None:
             pos = game.location(actor) or pos
+            if _marker_only(actor):
+                # A marker actor of its own (WillowWaypoint), not a thing: where it floats is
+                # all there is to it, so treat it as a fixed point (and put it on the ground).
+                actor = None
+        if actor is None and pos is not None:
+            pos = grounded(pc, pos)
         key = tuple(round(c / 50) for c in pos) if pos else id(actor)
         if key in seen:
             continue
@@ -456,6 +462,137 @@ def waypoints(pc: Any) -> list[Waypoint]:
             text = f"{_text(mission, 'MissionName') or 'Other mission'}: {text}"
         out.append(Waypoint(text, game.weak(actor) if actor is not None else None, pos, is_active))
     return out
+
+
+def _marker_only(actor: Any) -> bool:
+    """A pure marker actor (nothing to use or pick up), as opposed to the thing a marker is on."""
+    return "waypoint" in game.class_name(actor).lower()
+
+
+_ground: dict[tuple, tuple] = {}
+
+
+def grounded(pc: Any, pos: tuple) -> tuple:
+    """A marker with nothing at it can float well above the ground (Find new gear is 3.5 m up,
+    over flat open ground): the place to go is the floor right below it. A marker on a ledge or a
+    floor has that floor just below it, so it stays where it is. Measured once per marker."""
+    key = tuple(round(c / 50) for c in pos)
+    if key in _ground:
+        return _ground[key]
+    if not game.FLOOR_SEEN:
+        return pos
+    pawn = game.player_pawn(pc)
+    if pawn is None:
+        return pos
+    floor = game.ground_z(pawn, pos[0], pos[1], pos[2] + 20, depth=900)
+    if floor is None:
+        return pos            # nothing below (or tracing failed): try again next time
+    out = pos
+    if pos[2] - floor > 150:
+        out = (pos[0], pos[1], floor + 60)
+        from . import trace
+
+        trace.note(f"marker at ({pos[0]:.0f}, {pos[1]:.0f}, {pos[2]:.0f}) floats {(pos[2] - floor) / 100:.1f} m "
+                   f"above the ground; using the ground below it")
+    _ground[key] = out
+    return out
+
+
+# ------------------------------------------------------------------ what an objective needs (for the log)
+_objectives_recorded: set[str] = set()
+
+
+def _value_text(v: Any) -> str:
+    try:
+        if v is None or isinstance(v, (bool, int, float, str)):
+            return repr(v)
+        name = getattr(v, "Name", None)
+        if name is not None:
+            return f"<{game.class_name(v)} {name}>"
+        try:
+            items = list(v)
+            return "[" + ", ".join(_value_text(x) for x in items[:8]) + (", ..." if len(items) > 8 else "") + "]"
+        except Exception:
+            pass
+        return str(v)[:120]
+    except Exception as e:  # noqa: BLE001
+        return f"(unreadable: {type(e).__name__})"
+
+
+def _properties(obj: Any) -> list[tuple[str, str]]:
+    out = []
+    try:
+        props = list(obj.Class._properties())
+    except Exception:
+        try:
+            props = list(obj._type._properties())
+        except Exception:
+            return out
+    for p in props:
+        try:
+            out.append((str(p.Name), _value_text(getattr(obj, str(p.Name)))))
+        except Exception:
+            continue
+    return out
+
+
+def record_objective(pc: Any, label: str, marker: tuple | None) -> str | None:
+    """Once per objective: the tracked mission's live objectives (every field of their
+    definitions) and everything usable within 40 m of the marker, to logs/objectives.txt. To
+    find out what an objective needs that standing at its marker doesn't do."""
+    if label in _objectives_recorded or marker is None:
+        return None
+    _objectives_recorded.add(label)
+    import math
+    import os
+    import time
+
+    from .trace import LOG_DIR
+
+    trk = tracker(pc)
+    lines = [f"\n==== {time.strftime('%Y-%m-%d %H:%M:%S')} objective '{label}', marker at "
+             f"({marker[0]:.0f}, {marker[1]:.0f}, {marker[2]:.0f})"]
+    try:
+        mission = trk.ActiveMission if trk is not None else None
+        entry = _entry_for(trk, mission) if mission is not None else None
+        stage = _active_set(entry)
+        lines.append(f"mission {getattr(mission, 'Name', None)}, stage {getattr(stage, 'Name', None)}")
+        for d in (list(stage.ObjectiveDefinitions) if stage is not None else _objective_defs(mission)):
+            lines.append(f"objective definition {getattr(d, 'Name', '?')}:")
+            lines += [f"  {n} = {v}" for n, v in _properties(d)]
+    except Exception as e:  # noqa: BLE001
+        lines.append(f"(couldn't read the objective: {type(e).__name__}: {e})")
+    near = []
+    for a in game.world_actors(["WillowInteractiveObject", "WillowPickup", "WillowVendingMachineBase",
+                                "WillowAIPawn", "WillowInventory"]):
+        q = game.location(a)
+        if q is None:
+            continue
+        d = math.dist(q[:2], marker[:2])
+        if d > 4000:
+            continue
+        info = []
+        for field in ("InteractiveObjectDefinition", "Inventory", "DefinitionData", "AIClass", "MissionDirector",
+                      "SimpleAnimState", "bCanBeUsed", "UsabilityType"):
+            try:
+                v = getattr(a, field)
+            except Exception:
+                continue
+            info.append(f"{field}={_value_text(v)}")
+        near.append((d, f"{game.class_name(a)} {getattr(a, 'Name', '?')} '{game.display_name(a)}' at "
+                        f"({(q[0] - marker[0]) / 100:+.1f}, {(q[1] - marker[1]) / 100:+.1f}) m, "
+                        f"{(q[2] - marker[2]) / 10:+.0f} dm; " + ", ".join(info)))
+    near.sort()
+    lines.append(f"usable things, pickups and characters within 40 m of the marker ({len(near)}):")
+    lines += [f"  {d / 100:5.1f} m  {t}" for d, t in near[:80]]
+    path = os.path.join(LOG_DIR, "objectives.txt")
+    try:
+        os.makedirs(LOG_DIR, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+    except Exception:
+        return None
+    return path
 
 
 # ------------------------------------------------------------------ one-time class inventory

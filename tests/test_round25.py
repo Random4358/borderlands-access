@@ -337,6 +337,48 @@ PR.maybe_probe(me_, "Far", "Far thing", (5000.0, 0.0, 300.0))
 PR.maybe_probe(NS(Location=NS(X=500.0, Y=0.0, Z=340.0)), "Level", "Level thing", (600.0, 0.0, 300.0))
 assert open(out, encoding="utf-8").read().count("==== ") == 1
 os.remove(out); objects["Actor"] = []
+
+# --- a marker floating over open ground is put on the ground below it (Find new gear floats 3.5 m
+# up over flat ground); one on a platform stays on the platform
+import bl2_access.quests as Q
+saved_pp = G_.player_pawn
+G_.player_pawn = lambda pc=None: me_
+Q._ground.clear(); notes.clear()
+fl = Q.grounded(NS(), (0.0, 0.0, 350.0))
+assert abs(fl[2] - 60) < 15 and fl[:2] == (0.0, 0.0), fl
+assert any("floats 3.5 m above the ground" in n for n in notes), notes
+on = Q.grounded(NS(), (600.0, 0.0, 300.0))
+assert on == (600.0, 0.0, 300.0), on
+assert Q._marker_only(NS(Class=NS(Name="WillowWaypoint"))) and not Q._marker_only(NS(Class=NS(Name="WillowInteractiveObject")))
+print("floating markers OK")
+
+# --- what an objective needs: its definition and what's usable near its marker, once
+class Chest:
+    def __init__(s, name, x):
+        s.Name = name; s.Class = NS(Name="WillowInteractiveObject"); s.Location = NS(X=x, Y=0.0, Z=0.0); s.bDeleteMe = False
+        s.InteractiveObjectDefinition = NS(Name="IO_MissionGearChest", Class=NS(Name="InteractiveObjectDefinition"))
+    def _path_name(s): return f"Glacial_P.TheWorld:PersistentLevel.{s.Name}"
+objects["WillowInteractiveObject"] = [Chest("WillowInteractiveObject_5", 1500.0), Chest("WillowInteractiveObject_9", 90000.0)]
+objdef = NS(Name="FindGear", Class=NS(Name="MissionObjectiveDefinition", _properties=lambda: [NS(Name="ProgressMessage"), NS(Name="ObjectiveCount")]),
+            ProgressMessage="Find new gear", ObjectiveCount=1)
+stage = NS(Name="FindGearSet", ObjectiveDefinitions=[objdef])
+saved_q = (Q.tracker, Q._entry_for, Q._active_set)
+Q.tracker = lambda pc: NS(ActiveMission=NS(Name="Blindsided"))
+Q._entry_for = lambda trk, mission: NS()
+Q._active_set = lambda entry: stage
+Q._objectives_recorded.clear()
+obj_out = os.path.join(T.LOG_DIR, "objectives.txt")
+if os.path.exists(obj_out):
+    os.remove(obj_out)
+assert Q.record_objective(NS(), "Find new gear", (0.0, 0.0, 60.0)) == obj_out
+assert Q.record_objective(NS(), "Find new gear", (0.0, 0.0, 60.0)) is None          # once
+text = open(obj_out, encoding="utf-8").read()
+print(text)
+assert "stage FindGearSet" in text and "ProgressMessage = 'Find new gear'" in text and "ObjectiveCount = 1" in text
+assert "WillowInteractiveObject_5" in text and "IO_MissionGearChest" in text and "WillowInteractiveObject_9" not in text
+os.remove(obj_out); objects["WillowInteractiveObject"] = []
+Q.tracker, Q._entry_for, Q._active_set = saved_q
+G_.player_pawn = saved_pp
 G_.fast_trace, G_.FLOOR_SEEN, G_.location, G_.feet_z = saved
 print("marker probe OK")
 m.on_disable()

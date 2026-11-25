@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Floating markers go on the ground**: a marker with nothing at it can float well above open ground (Find new gear is
+  3.5 m up over flat ground). The place to go is now the ground right below it, so you arrive there instead of being
+  told it's above you and sent looking for a way up. A marker on a ledge or an upper floor stays where it is.
+- **What an objective needs is recorded**: once per objective, its definition and every usable thing, pickup and
+  character within 40 m of its marker go to logs\objectives.txt.
 - **Beacon no longer points through walls near the end of a route**: standing beside a wall with the end of the route
   just behind it, the beacon could take the far side as where you were on the route and point straight through. Where
   you are on a route is now tracked forward from where you were.
