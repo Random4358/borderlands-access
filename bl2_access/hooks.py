@@ -111,6 +111,12 @@ def on_tick(obj: Any, args: Any, ret: Any, func: Any) -> None:
             screen_text.tick()
         except Exception:
             _report("screen text tick")
+        try:
+            from .cutscenes import cutscenes
+
+            cutscenes.tick()
+        except Exception:
+            _report("cutscene tick")
         features.tick()
     except Exception:
         _report("tick")

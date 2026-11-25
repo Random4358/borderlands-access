@@ -1,0 +1,23 @@
+{
+ "key": "TC_Marcus",
+ "title": "Marcus",
+ "kind": "movie",
+ "lines": [
+  [
+   0.0,
+   "Marcus sits behind the bars of his shop's cashier window."
+  ],
+  [
+   5.9,
+   "A bandit leans in."
+  ],
+  [
+   8.5,
+   "Marcus fires a revolver. The bandit drops to the floor."
+  ],
+  [
+   15.1,
+   "Title: Marcus. No refunds!"
+  ]
+ ]
+}

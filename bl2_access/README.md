@@ -235,6 +235,20 @@ mod's options under the Mods menu.
 | Modifier button | A tiny click when you hold the modifier button for a shortcut. |
 | Error | A low buzz when an action can't be done. |
 
+## Cutscene descriptions
+
+During cutscenes the mod describes what's happening on screen, fitted between the lines of dialogue where it can.
+Descriptions are written so far for the opening intro and four character introduction videos (Marcus, Scooter, Tannis
+and Dr. Zed). Turn them off with "Cutscene descriptions" in the Cutscenes options.
+
+Each cutscene's description is a small file in `descriptions\`, so more can be added without changing the mod.
+
+**Helping write more:** most of the game's story scenes are played live by the engine, so the only way to describe them
+is to capture them once. Turn on "Cutscene capture, for writing descriptions" (Cutscenes options) and play as normal.
+During each cutscene the game takes a screenshot every second, and `logs\cutscene_capture.txt` records which cutscene
+and how far into it each one was. Send the screenshots and that file, and descriptions can be written from them. Leave
+capture off otherwise.
+
 ## Options
 
 Every option is in the mod menu, in these groups: General (volume, speech output, test button), Controller and menus,

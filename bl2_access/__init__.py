@@ -1,4 +1,4 @@
-﻿"""Borderlands Access: screen reader output, audio radar and controller combos for blind players."""
+"""Borderlands Access: screen reader output, audio radar and controller combos for blind players."""
 
 from __future__ import annotations
 
@@ -50,6 +50,14 @@ opt_direct_trace = BoolOption("Direct engine line tests (experimental)", True)
 opt_auto_trace = BoolOption(
     "Trace menu functions at startup", False,
     description="Developer tool: hooks hundreds of game functions and logs them to logs\\trace.log. Can crash the game during level loads, so leave off unless asked. F2 starts a trace by hand.",
+)
+opt_cutscene_desc = BoolOption(
+    "Cutscene descriptions", True,
+    description="Describes what happens on screen during cutscenes, between the lines of dialogue. Written for the opening intro so far; more are being added.",
+)
+opt_cutscene_capture = BoolOption(
+    "Cutscene capture, for writing descriptions", False,
+    description="Takes a screenshot every second during cutscenes and notes which cutscene it was in logs\cutscene_capture.txt, so descriptions can be written for it. Leave off unless you are helping write descriptions.",
 )
 opt_menu_desc = BoolOption("Read option descriptions", True, description="In options menus, read the help text after each entry.")
 
@@ -166,6 +174,7 @@ OPTIONS = [
     GroupedOption("Object sounds", [opt_loot_sounds, opt_loot_style, opt_container_sounds, opt_interactive_sounds, opt_quest_item_sounds,
                                     opt_object_range, opt_object_max, opt_object_volume]),
     GroupedOption("Navigation", [opt_npc_sounds, opt_npc_range, opt_npc_max, opt_npc_talk, opt_interact, opt_use_assist, opt_lock_nav, opt_walls, opt_wall_dist, opt_ledges, opt_jump, opt_jump_height, opt_speak_jump, opt_speak_blocked, opt_low_health, opt_low_health_pct]),
+    GroupedOption("Cutscenes", [opt_cutscene_desc, opt_cutscene_capture]),
     GroupedOption("Sound glossary and volumes", list(SOUND_OPTS.values())),
 ]
 
@@ -198,6 +207,10 @@ def sync_settings() -> None:
     s.interact_prompts = opt_interact.value
     s.use_assist = opt_use_assist.value
     s.lock_nav = opt_lock_nav.value
+    from .cutscenes import cutscenes
+
+    cutscenes.enabled = opt_cutscene_desc.value
+    cutscenes.capture = opt_cutscene_capture.value
     s.jump = opt_jump.value
     s.speak_blocked = opt_speak_blocked.value
     s.loot_sounds = opt_loot_sounds.value
@@ -310,6 +323,15 @@ def on_enable() -> None:
     except Exception as e:  # noqa: BLE001
         print(f"[Borderlands Access] status menu reader unavailable: {e}")
     trace.register_commands()
+    try:
+        from .cutscenes import cutscenes
+
+        cutscenes.register()
+        written = cutscenes.write_class_inventory()
+        if written:
+            trace.note(f"wrote {written}")
+    except Exception as e:  # noqa: BLE001
+        print(f"[Borderlands Access] cutscene descriptions unavailable: {e}")
     try:  # one-time list of mission/objective/waypoint classes, for adding objective markers
         from . import quests
 
@@ -342,6 +364,12 @@ def on_disable() -> None:
         from .status_reader import status
 
         status.unregister()
+    except Exception:
+        pass
+    try:
+        from .cutscenes import cutscenes
+
+        cutscenes.unregister()
     except Exception:
         pass
     try:

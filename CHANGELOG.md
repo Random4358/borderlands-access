@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Cutscene descriptions**: what happens on screen is described during cutscenes, between the lines of dialogue.
+  Written so far for the opening intro and the Marcus, Scooter, Tannis and Dr. Zed introduction videos, from frames of
+  the game's own video files. Videos are timed from when they start; scenes the engine plays live are timed by their own
+  playback position. On by default ("Cutscene descriptions", Cutscenes options).
+- **Cutscene capture**: an option for helping write more descriptions. During cutscenes it takes a screenshot every
+  second and logs which cutscene each belongs to.
+- How the game starts its videos and scenes isn't known for certain yet, so the mod watches several ways and logs which
+  one fires ("cutscene:" lines in diagnostic.log, and logs\cutscene_classes.txt).
+
 ## 0.2.1
 
 From a tester's reports:
