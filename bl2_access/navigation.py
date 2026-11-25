@@ -37,6 +37,8 @@ from .audio import audio
 ON_COURSE_DEG = 7.0     # facing this close to the way to go = "on course"
 NODE_REACHED = 140.0    # uu: close enough to a route point to move on to the next one
 KNOWN_REACHED = 90.0    # uu: the same along known paths (closer, so corners aren't cut)
+KNOWN_AHEAD = 1000.0    # uu along a known path the beacon may aim ahead (~10 m), while it runs straight
+KNOWN_WIDTH = 60.0      # uu: a walked trail (smoothed) this close to a straight line counts as straight (trails wobble)
 ROUTE_EVERY = 0.5       # seconds between asking the game for a route
 STEER_EVERY = 0.25      # seconds between local steering checks
 STEER_REACH = 450.0     # uu: how far ahead each steering direction is tested (~4.5 m)
@@ -61,6 +63,15 @@ def _dist(a: tuple, b: tuple) -> float:
     return math.dist(a, b)
 
 
+def _smoothed(path: list, a: int, b: int) -> list:
+    """path[a:b] with each point averaged with its neighbours (takes out the grid's zig-zag)."""
+    out = []
+    for k in range(a, b):
+        nb = path[max(0, k - 1):k + 2]
+        out.append((sum(q[0] for q in nb) / len(nb), sum(q[1] for q in nb) / len(nb)))
+    return out
+
+
 class _NoPath(Exception):
     """The navigation mesh answered, but found no path this time."""
 
@@ -70,13 +81,13 @@ def _first(r: Any) -> Any:
     return r[0] if isinstance(r, tuple) else r
 
 
-def _straight(a: tuple, b: tuple, between: list) -> bool:
-    """All the points walked between a and b lie within 40 uu of the line a-b."""
+def _straight(a: tuple, b: tuple, between: list, width: float = KNOWN_WIDTH) -> bool:
+    """All the points walked between a and b lie within `width` of the line a-b."""
     dx, dy = b[0] - a[0], b[1] - a[1]
     n = math.hypot(dx, dy)
     if n < 1:
         return True
-    return all(abs((q[0] - a[0]) * dy - (q[1] - a[1]) * dx) / n <= 40 for q in between)
+    return all(abs((q[0] - a[0]) * dy - (q[1] - a[1]) * dx) / n <= width for q in between)
 
 
 class Route:
@@ -113,6 +124,7 @@ class Route:
         self.known_at = 0.0
         self.known_version = -1
         self.known_said = False
+        self.known_aim = 0                   # the point the beacon aims at: only ever moves forward
 
     def reset(self) -> None:
         self.node, self.source, self.next_update, self.target_key = None, "", 0.0, ""
@@ -169,7 +181,7 @@ class Route:
         off = bool(path) and min(math.dist(here[:2], q[:2]) for q in path[self.known_idx:self.known_idx + 20] or path) > 500
         # Re-plan when off the path, or every few seconds if the known paths have grown since (a
         # search can take a moment on a big level, so not every frame).
-        stale = now >= self.known_at + 3.0 and (graph.version != self.known_version or not self.known_done)
+        stale = now >= self.known_at + 3.0 and not self.known_done and graph.version != self.known_version
         if now >= self.known_at and (not path or off or stale):
             self.known_at = now + 1.0
             self.known_version = graph.version
@@ -178,7 +190,7 @@ class Route:
                 self.known, self.known_done = [], False
             else:
                 self.known, self.known_done = r
-                self.known_idx = 0
+                self.known_idx = self.known_aim = 0
                 length = sum(math.dist(a, b) for a, b in zip(self.known, self.known[1:])) / 100
                 self._note(f"known paths: {'route to the target' if self.known_done else 'part of the way'}, "
                            f"{length:.0f} m over {len(self.known)} points")
@@ -201,15 +213,64 @@ class Route:
             self.known_idx += 1
         if self.known_idx >= len(path):
             return target_pos if self.known_done else None
-        # Look ahead along the path while it runs straight, so the tone doesn't wobble between
-        # points a metre apart, but never cut a corner people walked around.
-        j = self.known_idx
-        while j + 1 < len(path) and j - self.known_idx < 12 and _straight(here, path[j + 1], path[self.known_idx:j + 1]):
+        # Aim well ahead along the path while it runs straight (up to ~10 m), never at the point
+        # nearest you: walking a metre to one side of the trail, that point is beside you, and the
+        # tone would swing left and right as you pass each one. Corners people walked around are
+        # never cut. The aim only moves forward, so small steps don't make it jump back and forth.
+        j, run = self.known_idx, 0.0
+        start = max(0, self.known_idx - 1)
+        smooth = _smoothed(path, start, min(len(path), start + 40))
+        while j + 1 < len(path):
+            run += math.dist(path[j][:2], path[j + 1][:2])
+            # The path itself must run straight (its zig-zag from the 1.2 m grid smoothed out), from
+            # the stretch you're on (the point before the next one) to the aim. Not the line from
+            # you: you may be a metre or two off to the side, and you're led back onto it.
+            if run > KNOWN_AHEAD or j + 1 - start >= len(smooth) or                     not _straight(smooth[0], smooth[j + 1 - start], smooth[:j + 1 - start]):
+                break
             j += 1
+        if game.FLOOR_SEEN and pawn is not None:
+            # line tests work: what you can actually walk straight to decides, not the trail's shape
+            j = max(self.known_idx, self._known_visible(pawn, here, path, now))
+        j = max(j, self.known_aim)
+        if j >= len(path):
+            j = len(path) - 1
+        self.known_aim = j
         q = path[j]
-        if self.known_done and j == len(path) - 1 and math.dist(q[:2], target_pos[:2]) < 300:
+        # the target itself once you're at the end of the path (not before: it may be round a corner)
+        if self.known_done and j == len(path) - 1 and math.dist(q[:2], target_pos[:2]) < 300 \
+                and math.dist(here[:2], q[:2]) < 200:
             return target_pos
         return (q[0], q[1], q[2] + 60)
+
+    def _known_visible(self, pawn: Any, here: tuple, path: list, now: float) -> int:
+        """With working line tests: the furthest point along the known path (up to ~10 m on) that
+        you can walk straight to, checked down both sides of your body. Checked 4 times a second."""
+        if not game.FLOOR_SEEN or pawn is None:
+            return 0
+        if now < getattr(self, "known_vis_at", 0.0) and getattr(self, "known_vis_path", None) is path:
+            return self.known_vis
+        self.known_vis_at, self.known_vis_path, self.known_vis = now + 0.25, path, 0
+        feet = game.feet_z(pawn)
+        base = feet if feet is not None else here[2] - 100
+        run = 0.0
+        for k in range(self.known_idx, len(path)):
+            if k > self.known_idx:
+                run += math.dist(path[k - 1][:2], path[k][:2])
+            if run > KNOWN_AHEAD:
+                break
+            q = path[k]
+            dx, dy = q[0] - here[0], q[1] - here[1]
+            n = math.hypot(dx, dy) or 1.0
+            sx, sy = -dy / n * BODY, dx / n * BODY
+            ok = True
+            for ox, oy in ((0.0, 0.0), (sx, sy), (-sx, -sy)):
+                if game.fast_trace(pawn, (here[0] + ox, here[1] + oy, base + 50),
+                                   (q[0] + ox, q[1] + oy, q[2] + 50)) is False:
+                    ok = False
+                    break
+            if ok:
+                self.known_vis = k
+        return self.known_vis
 
     def _note_target(self, key: str, eye: tuple, target_pos: tuple) -> None:
         from . import trace
@@ -241,13 +302,18 @@ class Route:
             self.path, self.path_kind, self.limit, self.last_gap = [], "", PLAN_CELLS, None
             self.runs_seen, self.watch, self.announced = 0, None, False
         pl = self.planner
-        far = math.dist(here[:2], target_pos[:2]) > FAR
+        # coarse grid far away; a margin either side so hovering near 35 m doesn't re-plan over and over
+        gap = math.dist(here[:2], target_pos[:2])
+        far = gap > (FAR - 300 if getattr(self, "path_cell", 90.0) == 180.0 and self.path else FAR + 300)
         cell = 180.0 if far else 90.0
         path = self.path
         off_route = bool(path) and min(math.dist(here[:2], q[:2]) for q in path) > cell * 2.5
         at_end = bool(path) and self.path_kind == "partial" and math.dist(here[:2], path[-1][:2]) < cell * 1.2
         grain_changed = bool(path) and (cell != self.path_cell)
-        if pl.state != "running" and (not path or now >= self.replan_at or off_route or at_end or grain_changed):
+        # A route that reaches the target is kept while you follow it; re-planned only when you leave
+        # it, stop getting further along it, or get snagged (those set replan_at to 0).
+        due = now >= self.replan_at and (self.path_kind != "done" or self.replan_at == 0.0)
+        if pl.state != "running" and (not path or due or off_route or at_end or grain_changed):
             # Start from the ground actually under you (measured), not an estimate from your height.
             ground = game.ground_z(pawn, loc[0], loc[1], loc[2])
             start = (loc[0], loc[1], ground if ground is not None else feet)
@@ -279,6 +345,13 @@ class Route:
         nxt = follow(self.path, here, visible)
         if nxt is None:
             return None
+        # Only ever forward along the route: which far point you can see changes with each step.
+        k = self.path.index(nxt)
+        aim = getattr(self, "follow_k", 0)
+        if k < aim < len(self.path):
+            nxt = self.path[aim]
+        else:
+            self.follow_k = k
         self._climb_cue(here)
         if self.path_kind == "done" and nxt == self.path[-1]:
             return target_pos
@@ -339,6 +412,7 @@ class Route:
         else:
             self.limit, self.last_gap = PLAN_CELLS, None
         self.path, self.path_kind, self.path_cell = list(pl.path), pl.state, pl.cell
+        self.follow_k = 0
         self.path_moves = list(getattr(pl, "moves", [])) or ["walk"] * len(self.path)
         n_jump, n_drop = self.path_moves.count("jump"), self.path_moves.count("drop")
         if n_jump or n_drop:

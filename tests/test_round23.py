@@ -204,6 +204,41 @@ print("arrived after", len(trail), "steps")
 assert math.dist((me.Location.X, me.Location.Y), target[:2]) < 150, trail[-5:]
 print("beacon follows known paths OK")
 
+# --- walking a little to one side of a wobbly trail, the beacon points ahead, not beside you
+# (a tester: "as soon as I start walking the beacon pans from side to side and all around me")
+g6 = W.WayGraph(); g6.map = "Glacial_P"
+wobbly = [(x, 50 if (x // 120) % 2 else -50) for x in range(0, 4001, 120)]
+walk(g6, 9, wobbly)
+W.graph.__dict__.update(g6.__dict__)
+r6 = NAV.Route(); target6 = (4000.0, 0.0, 0.0); me = Pawn(0, 150)
+heads = []
+for step in range(30):
+    x = 100.0 * step
+    me.Location = NS(X=x, Y=150.0, Z=0.0)
+    p = r6.next_point(PC(), (x, 150.0, 60.0), target6, None, "Trail", 0.2 * step, me)
+    heads.append(math.degrees(math.atan2(p[1] - 150.0, p[0] - x)))
+print("beacon bearings off a wobbly trail:", [round(h) for h in heads[:12]])
+assert all(abs(h) < 35 for h in heads), heads
+assert all(abs(a - b) < 20 for a, b in zip(heads, heads[1:])), heads
+print("steady beacon beside a trail OK")
+# with working line tests it aims at the furthest trail point you can walk straight to; a wall
+# across the way (the trace says blocked beyond x 2000) keeps the aim on this side of it
+G.FLOOR_SEEN = True
+orig_ft, orig_feet = G.fast_trace, G.feet_z
+G.fast_trace = lambda pawn, a, b: not (max(a[0], b[0]) > 2000 >= min(a[0], b[0]))
+G.feet_z = lambda pawn: 0.0
+r7 = NAV.Route(); far = []
+for step in range(14):
+    x = 100.0 * step
+    me.Location = NS(X=x, Y=150.0, Z=0.0)
+    p = r7.next_point(PC(), (x, 150.0, 60.0), target6, None, "Trail", 0.3 * step, me)
+    far.append(p[0] - x)
+    assert p[0] <= 2000, p
+print("aim ahead with line tests:", [round(d) for d in far])
+assert min(far[:8]) >= 500, far
+G.fast_trace, G.feet_z, G.FLOOR_SEEN = orig_ft, orig_feet, False
+print("aim ahead with line tests OK")
+
 # --- part of the way known: it leads there first
 g5 = W.WayGraph(); g5.map = "P"
 walk(g5, 3, [(0, 0), (600, 0)])

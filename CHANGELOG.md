@@ -25,6 +25,16 @@ Aiming with the enemy tones, which felt slower than lock-on:
   the buzzing on-target tone.
 - **Faster to follow your aim**: about 40 to 80 ms of sound is queued instead of 80 to 160 ms.
 
+The beacon, which a tester found swinging from side to side and all around them as soon as they walked:
+
+- **Aims ahead, not beside you**: along a known path the beacon used to aim at the nearest path point. A metre to one
+  side of the path, that point is beside you, so the tone swung left and right as you passed each one, and sometimes
+  behind you. It now aims up to about 10 m ahead: as far as you can walk straight (when line tests work), or as far as
+  the path runs straight. It still doesn't cut corners, and it only ever moves forward.
+- **Keeps the route it found**: a route that reaches the target is no longer worked out afresh every few seconds, so
+  it can't suddenly switch to a different way. It's re-planned only when you leave it, stop making progress, or get
+  stuck.
+
 ## 0.2.0
 
 - **Line tests that work**: the game's own line tests give fixed answers through the mod manager, so the mod now calls
