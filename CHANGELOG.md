@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Marker surroundings recorded**: near a marker well above or below you, the mod writes a height map of the ground
+  around it, the walls between, nearby objects and known paths to logs\marker_probe.txt, once per marker, so routes
+  to awkward markers can be fixed.
 - **Markers above you** (Find new gear): instead of "Look for a way up", the mod says what it knows: the way up it found
   (its length and jumps, and the beacon leads there), or where learned paths reach the marker's height nearby (and the
   beacon leads there first), or that it's still searching and will say what it finds.

@@ -1103,6 +1103,12 @@ class Features:
             key = getattr(self, "beacon_key", key)
         self.beacon_place, self.beacon_key = key.split(" @ ")[1], key
         nav_beacon.tick(self.s, snap, pos, poi.actor, key, now)
+        try:   # near a marker well above or below you: record its surroundings once (logs/marker_probe.txt)
+            from .probe import maybe_probe
+
+            maybe_probe(snap.pawn, key, poi.name, pos)
+        except Exception:
+            pass
         # Measured across the floor from your body: things' positions are at their base, so from
         # eye height a cabinet in front of you was over 2 m "away" and you never arrived.
         # Objective markers with no object at them are areas, so "arrived" a little earlier.

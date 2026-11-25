@@ -301,5 +301,43 @@ screen_text.last_add -= 1; screen_text.tick()
 assert said[-1][0] == "By playing you agree to the Terms of Service", said[-1]
 assert sum("Terms of Service" in s for s, _i in said) == 1
 print("unknown screens OK")
+
+# --- marker probe: the ground around a raised marker, written once to logs/marker_probe.txt
+import os
+from bl2_access import probe as PR
+cliff_trace = world(lambda x, y: 250.0 if on_platform(x, y) else 0.0)
+G_ = NAV.game
+saved = (G_.fast_trace, G_.FLOOR_SEEN, G_.location, G_.feet_z)
+G_.fast_trace = lambda pawn, a, b: cliff_trace(a, b)
+G_.FLOOR_SEEN = True
+G_.location = lambda a: (a.Location.X, a.Location.Y, a.Location.Z)
+G_.feet_z = lambda a: a.Location.Z - 90
+class Ladder:
+    def __init__(s): s.Name = "Ladder_0"; s.Class = NS(Name="LadderVolume"); s.Location = NS(X=820.0, Y=0.0, Z=200.0)
+    def _path_name(s): return "Glacial_P.TheWorld:PersistentLevel.Ladder_0"
+objects["Actor"] = [Ladder()]
+out = os.path.join(T.LOG_DIR, "marker_probe.txt")
+if os.path.exists(out):
+    os.remove(out)
+me_ = NS(Location=NS(X=0.0, Y=0.0, Z=90.0))
+notes.clear()
+PR.maybe_probe(me_, "Gear @ x", "Find new gear", (600.0, 0.0, 300.0))      # 6 m away, 3 m up: probed
+PR.maybe_probe(me_, "Gear @ x", "Find new gear", (600.0, 0.0, 300.0))      # once
+text = open(out, encoding="utf-8").read()
+print(text[:900])
+assert text.count("==== ") == 1 and "Find new gear at (600, 0, 300) (above you by 3.0 m)" in text
+grid = [l for l in text.splitlines() if l[:4].strip().lstrip("-").isdigit()]
+assert len(grid) == 13, grid
+mid = grid[6].split()
+assert mid[0] == "0" and "[ -5]" in grid[6] and "-30" in grid[6], grid[6]   # the platform 0.5 m below it, the ground 3 m below
+assert "LadderVolume Ladder_0 at (+2.2, +0.0) m" in text
+assert "blocked between level neighbours" in text and any("marker probe: wrote" in n for n in notes)
+# far away or level with you: not probed
+PR.maybe_probe(me_, "Far", "Far thing", (5000.0, 0.0, 300.0))
+PR.maybe_probe(NS(Location=NS(X=500.0, Y=0.0, Z=340.0)), "Level", "Level thing", (600.0, 0.0, 300.0))
+assert open(out, encoding="utf-8").read().count("==== ") == 1
+os.remove(out); objects["Actor"] = []
+G_.fast_trace, G_.FLOOR_SEEN, G_.location, G_.feet_z = saved
+print("marker probe OK")
 m.on_disable()
 print("ALL ROUND 25 TESTS OK")
