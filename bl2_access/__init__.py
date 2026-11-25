@@ -22,7 +22,7 @@ from .features import features as feats
 from .menu_reader import reader
 from .speech import speech as speaker
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 # ----------------------------------------------------------------------------- options
 

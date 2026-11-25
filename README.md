@@ -13,7 +13,7 @@ controller support.
 
 ## Install
 
-1. Download `BorderlandsAccess-0.2.0.zip` from the [latest release](../../releases/latest) and extract the whole zip.
+1. Download `BorderlandsAccess-0.2.1.zip` from the [latest release](../../releases/latest) and extract the whole zip.
 2. Close Borderlands 2, then double-click **Install.cmd** in the extracted folder.
 
 The installer reads out each step as plain text, so your screen reader can follow it, and asks before anything that

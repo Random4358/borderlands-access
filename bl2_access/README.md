@@ -243,7 +243,7 @@ strength), and Navigation (wall distance, ledges, low-health threshold).
 
 ## Known limitations and what to test first
 
-This is version 0.2.0. These have been confirmed working inside Borderlands 2: speech through Prism, the main, options and slider menus, dialogs, character select, status menu tab names, inventory item cards, the direct engine line tests, the route planner, lock-on aim, the interaction prompts and the mission stage readout. The rest has been tested against a simulated game. Some of the game's internal names it relies on are best guesses. Every one of them is wrapped so that if one is wrong, only that feature stops working and the game doesn't crash. Errors are printed to the SDK console (press `~` in game) with a `[Borderlands Access]` prefix.
+This is version 0.2.1. These have been confirmed working inside Borderlands 2: speech through Prism, the main, options and slider menus, dialogs, character select, status menu tab names, inventory item cards, the direct engine line tests, the route planner, lock-on aim, the interaction prompts and the mission stage readout. The rest has been tested against a simulated game. Some of the game's internal names it relies on are best guesses. Every one of them is wrapped so that if one is wrong, only that feature stops working and the game doesn't crash. Errors are printed to the SDK console (press `~` in game) with a `[Borderlands Access]` prefix.
 
 - **Untested in the game so far: inventory, vendor and skill tree reading, tab names and objective markers.** Rarity
   names are worked out from the colour of the item's name; only "common" has been seen in a trace so far. The mission log tab

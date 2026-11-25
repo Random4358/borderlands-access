@@ -36,7 +36,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ModVersion = "0.2.0"
+$ModVersion = "0.2.1"
 $SdkVersion = "v3.8"
 $SdkUrl = "https://github.com/bl-sdk/willow2-mod-manager/releases/download/v3.8/willow2-sdk.zip"
 $SdkSha256 = "e1862ddb282cf845369c9ca1ca70ac180d6104cce25d8a133557fc74e157b4c7"
