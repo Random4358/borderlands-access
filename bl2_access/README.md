@@ -98,11 +98,14 @@ away. Turn the spoken part off with "Say when you're blocked" in the Navigation 
 
 **Combat**: the enemy tones are designed for aiming, not just for knowing enemies are there.
 - **Left or right**: the tone is panned by where the enemy is compared with your crosshair. Turn toward it until it's
-  centred.
-- **Up or down**: the pitch is the middle note when the enemy is level with your crosshair. It's higher when the enemy is
-  above (up to an octave at 30 degrees) and lower when below.
-- **How close your aim is**: a soft, mellow tone means the enemy is off to the side. Within about 10 degrees it becomes
-  brighter and gently pulses. When your crosshair is on the enemy it switches to a buzzy, fast-pulsing high tone: fire.
+  centred. It's only centred when your crosshair is within the enemy's width: even slightly off, it jumps clearly to that
+  side, so you can hear the last few degrees.
+- **Up or down**: the pitch is exactly the middle note when the enemy is level with your crosshair. A little above or
+  below, it jumps a semitone higher or lower at once, and keeps rising or falling up to an octave at 30 degrees.
+- **How close your aim is**: a soft, mellow tone means the enemy is off to the side. Within about 15 degrees it pulses
+  slowly, within about 6 degrees it pulses quicker and brighter, and when your crosshair is on the enemy it switches to a
+  buzzy, fast-pulsing high tone: fire. The pulse speeding up tells you you're closing in.
+- The tones follow your aim within about a twentieth of a second.
 - **Distance and cover**: closer enemies are louder. Enemies behind you or behind cover are muffled.
 
 The nearest 3 enemies play at once by default ("Radar max enemies"). **Aiming help while aiming down sights** (Targeting
@@ -201,7 +204,7 @@ mod's options under the Mods menu.
 | Sound | What it means |
 |---|---|
 | Enemy tone, off target | Steady tone for each nearby enemy. Panned to where it is compared with your aim, higher when it's above your crosshair, lower when below, louder when closer. |
-| Enemy tone, nearly on target | The enemy tone turns brighter and gently pulses when your aim is within about 10 degrees of the enemy. |
+| Enemy tone, nearly on target | The enemy tone turns brighter and pulses as your aim gets close: a slow pulse within about 15 degrees, a quicker, brighter pulse within about 6 degrees. |
 | Enemy tone, on target | A buzzy, fast-pulsing high tone: your crosshair is on the enemy. Fire. |
 | Enemy radar beep | Repeating beep for each nearby enemy, used when the enemy sound style is set to radar beeps. |
 | Target lock | A rising two-note click when your crosshair lands on an enemy, or lock-on picks one. |

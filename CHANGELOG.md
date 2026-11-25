@@ -16,6 +16,15 @@ From a tester's reports:
 - **Handing in missions**: use assist now also talks to the character the "Talk to" prompt just named, so you can hand in
   a mission (for example My First Gun, to Claptrap) without aiming at them. A mission that's ready to hand in says how.
 
+Aiming with the enemy tones, which felt slower than lock-on:
+
+- **Clear in the last few degrees**: the tone is only centred when your crosshair is within the enemy's width. Even
+  slightly off, it jumps a third of the way to that side, and the pitch jumps a semitone if you're a little high or
+  low. Before, the last few degrees all sounded nearly centred and level.
+- **Pulse speeds up as you close in**: a slow pulse within about 15 degrees, a quicker, brighter one within about 6, then
+  the buzzing on-target tone.
+- **Faster to follow your aim**: about 40 to 80 ms of sound is queued instead of 80 to 160 ms.
+
 ## 0.2.0
 
 - **Line tests that work**: the game's own line tests give fixed answers through the mod manager, so the mod now calls

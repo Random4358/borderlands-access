@@ -101,6 +101,20 @@ for k1, c1, k2, c2 in [("enemy", 32, "enemy", 34), ("enemy", 30, "enemy_near", 3
             assert abs(b[ch] - a[-2 + ch]) <= max(max_step(a, ch), max_step(b, ch)) * 1.05 + 50, (k1, k2, step)
 assert A.enemy_cycles(0) == 32 and A.enemy_cycles(30) == 64 and A.enemy_cycles(-30) == 16 and A.enemy_cycles(90) == 64
 assert A.enemy_cycles(10) > 32 > A.enemy_cycles(-10)
+# level within the enemy's height; just outside, a semitone at once
+assert A.enemy_cycles(1.5, 2.0) == 32 and A.enemy_cycles(-1.9, 2.0) == 32
+assert A.enemy_cycles(2.5, 2.0) >= 34 and A.enemy_cycles(-2.5, 2.0) <= 30
+from bl2_access.combat_sounds import aim_pan
+def _e(yaw_deg, dist=2000):
+    return NS(rel=NS(rel_yaw=math.radians(yaw_deg), dist=dist))
+assert aim_pan(_e(1.0)) == 0 and aim_pan(_e(-1.5)) == 0          # within the body width (1.7 deg at 20 m)
+assert 0.35 <= aim_pan(_e(2.5)) < 0.4 and -0.4 < aim_pan(_e(-2.5)) <= -0.35
+assert aim_pan(_e(15)) > aim_pan(_e(5)) > aim_pan(_e(2.5)) and aim_pan(_e(60)) == 1.0
+# a half-segment boundary joins cleanly too, even when the pitch or voice changes there
+for k1, c1, k2, c2 in [("enemy", 33, "enemy", 34), ("enemy_near", 31, "enemy_near2", 32)]:
+    a = samples(A.tone_segment(k1, c1, 0, 0, 0.7, False)); b = samples(A.tone_segment(k2, c2, 1, 0, 0.7, False))
+    half = len(a) // 2
+    assert abs(b[half] - a[half - 2]) <= max(max_step(a, 0), max_step(b, 0)) * 1.05 + 50
 assert sum(energy(A.tone_segment("enemy", 32, 0, 0, 0.7, True))) < sum(energy(A.tone_segment("enemy", 32, 0, 0, 0.7, False)))
 print("tone synthesis OK")
 
@@ -164,18 +178,19 @@ tick()
 by_name = {e.key: e for e in f.enemies}
 print("states:", {k: aim_state(e) for k, e in by_name.items()})
 assert aim_state(by_name["Bandit"]) == "enemy_locked"
-assert aim_state(by_name["Psycho"]) == "enemy_near"
+assert aim_state(by_name["Psycho"]) == "enemy_near2"      # ~5 degrees: the quicker pulse
 assert aim_state(by_name["Goliath"]) == "enemy"
 assert set(tones.voices) == {"Bandit", "Psycho", "Nomad", "Marauder"}, set(tones.voices)   # nearest 4
 v = tones.voices
 assert v["Bandit"].kind == "enemy_locked" and v["Bandit"].cycles == A.LOCKED_CYCLES
-assert v["Psycho"].kind == "enemy_near" and v["Psycho"].pan > 0
+assert v["Psycho"].kind == "enemy_near2" and v["Psycho"].pan >= 0.35   # a few degrees off: clearly to one side
+assert v["Bandit"].pan == 0
 assert v["Nomad"].cycles > A.ENEMY_BASE and v["Nomad"].pan < 0          # above you: higher; left
 assert v["Marauder"].muffled and not v["Bandit"].muffled                  # behind cover: muffled
 # off screen the game draws nothing, whatever is in the way: not called "behind cover"
 side_e.seen = False; tick(); assert {e.key: e.visible for e in f.enemies}["Goliath"] is True; side_e.seen = True; tick()
 for st in eng.combat_streams:
-    assert st.ahead() >= 0.1 - 1e-9
+    assert st.ahead() >= 0.06 - 1e-9 and all(len(b) == A.SEG_N * 2 for b in st.fed), [len(b) for b in st.fed]   # 40 ms halves
 assert played.count("target") == 1 and said[-1][0] == "Bandit"          # one lock click + name, no ticking
 # the tone keeps going (no restart) and follows the aim: turn so the Goliath is ahead
 n = played.count("target")

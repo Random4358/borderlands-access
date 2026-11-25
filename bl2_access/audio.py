@@ -21,7 +21,7 @@ MAX_GAIN = 3.0  # per-sound volume goes up to 300%
 # (key, name, what it means). Each has its own volume, 0 to 300%.
 SOUNDS: list[tuple[str, str, str]] = [
     ("enemy", "Enemy tone, off target", "Steady tone for each nearby enemy. Panned to where it is compared with your aim, higher when it's above your crosshair, lower when below, louder when closer."),
-    ("enemy_near", "Enemy tone, nearly on target", "The enemy tone turns brighter and gently pulses when your aim is within about 10 degrees of the enemy."),
+    ("enemy_near", "Enemy tone, nearly on target", "The enemy tone turns brighter and pulses as your aim gets close: a slow pulse within about 15 degrees, a quicker, brighter pulse within about 6 degrees."),
     ("enemy_locked", "Enemy tone, on target", "A buzzy, fast-pulsing high tone: your crosshair is on the enemy. Fire."),
     ("radar", "Enemy radar beep", "Repeating beep for each nearby enemy, used when the enemy sound style is set to radar beeps."),
     ("ui_lock", "Target lock", "A rising two-note click when your crosshair lands on an enemy, or lock-on picks one."),
@@ -529,12 +529,14 @@ def loop_segment(kind: str, step: int, pan: float, vol: float, behind: bool, fad
 # varies (it tells you whether the enemy is above or below your crosshair), so the number of
 # cycles per segment is a parameter. Three voices tell you how close your aim is:
 #   enemy        a soft, mellow tone: the enemy is off to the side
-#   enemy_near   brighter and gently pulsing: within about 10 degrees of your crosshair
+#   enemy_near   brighter, slowly pulsing: within about 15 degrees of your crosshair
+#   enemy_near2  brighter still, pulsing quicker: within about 6 degrees (shares enemy_near's volume)
 #   enemy_locked a buzzy, fast-pulsing tone at a fixed high pitch: you're aimed at it, fire
 # --------------------------------------------------------------------------------------
 ENEMY_TONES: dict[str, tuple[list[float], list[tuple[int, float]]]] = {
     "enemy": ([1.0], [(1, 1.0), (3, 0.11)]),
-    "enemy_near": ([1.0, 1.0, 0.7, 0.7], [(1, 1.0), (2, 0.45), (3, 0.25)]),
+    "enemy_near": ([1.0, 1.0, 1.0, 0.6, 0.6, 0.6], [(1, 1.0), (2, 0.35), (3, 0.2)]),
+    "enemy_near2": ([1.0, 1.0, 0.55, 0.55], [(1, 1.0), (2, 0.5), (3, 0.3), (4, 0.15)]),
     "enemy_locked": ([1.0, 0.25], [(1, 1.0), (3, 0.33), (5, 0.2), (7, 0.14)]),
     # the beacon: mellow when you're not facing the way to go, bright when you are
     "beacon": ([1.0], [(1, 1.0), (2, 0.2)]),
@@ -544,10 +546,16 @@ ENEMY_BASE = 32      # 400 Hz: an enemy level with your crosshair
 LOCKED_CYCLES = 80   # 1000 Hz
 
 
-def enemy_cycles(rel_pitch_deg: float) -> int:
+def enemy_cycles(rel_pitch_deg: float, level_deg: float = 0.0) -> int:
     """Cycles per segment for an enemy this many degrees above (+) or below (-) your aim:
-    up to an octave higher or lower at 30 degrees."""
-    x = max(-1.0, min(1.0, rel_pitch_deg / 30))
+    up to an octave higher or lower at 30 degrees.
+
+    Within level_deg (about the enemy's body) it's exactly the middle note; just outside it the
+    pitch jumps a semitone at once, so "level" and "a little high or low" are easy to tell apart."""
+    off = abs(rel_pitch_deg) - level_deg
+    if off <= 0:
+        return ENEMY_BASE
+    x = math.copysign(min(1.0, 1 / 12 + off / 30), rel_pitch_deg)
     return max(8, int(round(ENEMY_BASE * 2 ** x)))
 
 
