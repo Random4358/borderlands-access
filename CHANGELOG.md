@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Beacon no longer points through walls near the end of a route**: standing beside a wall with the end of the route
+  just behind it, the beacon could take the far side as where you were on the route and point straight through. Where
+  you are on a route is now tracked forward from where you were.
 - **Marker surroundings recorded**: near a marker well above or below you, the mod writes a height map of the ground
   around it, the walls between, nearby objects and known paths to logs\marker_probe.txt, once per marker, so routes
   to awkward markers can be fixed.

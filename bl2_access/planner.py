@@ -252,13 +252,22 @@ class GridPlanner:
             self.state = "failed"
 
 
-def follow(path: list[Point], here: Point, visible: Callable[[Point], bool], reach: float = 700.0) -> Point | None:
+def progress(path: list[Point], here: Point, last: int = 0, window: int = 10) -> int:
+    """Where on the path you are: the nearest point, looking only a little back from and ahead
+    of where you were (`last`). Not the nearest of all: beside a wall, the nearest point can be
+    a later part of the route on the other side of it."""
+    lo, hi = max(0, last - 3), min(len(path), last + window)
+    return min(range(lo, hi), key=lambda k: math.dist(path[k][:2], here[:2]))
+
+
+def follow(path: list[Point], here: Point, visible: Callable[[Point], bool], reach: float = 700.0,
+           at: int | None = None) -> Point | None:
     """The point to head for on a route: the furthest point you can walk straight to (within
-    `reach`), so the beacon doesn't zigzag through every grid point."""
+    `reach`), so the beacon doesn't zigzag through every grid point. `at` is where on the path
+    you are (see progress); by default the nearest point."""
     if not path:
         return None
-    # Where on the path you are: the nearest point.
-    i = min(range(len(path)), key=lambda k: math.dist(path[k][:2], here[:2]))
+    i = at if at is not None else min(range(len(path)), key=lambda k: math.dist(path[k][:2], here[:2]))
     best = path[min(i + 1, len(path) - 1)]
     for k in range(i + 1, len(path)):
         if math.dist(path[k][:2], here[:2]) > reach:

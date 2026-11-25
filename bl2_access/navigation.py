@@ -51,6 +51,7 @@ FAR = 3500.0           # uu: beyond this the planner uses a coarse grid (35 m)
 PLAN_CELLS = 2500      # planner search limit, doubled (up to 4x) when a partial route stalls
 PLAN_BUDGET = 2000     # line traces the planner may use per frame at most
 PLAN_SECONDS = 0.004   # and the time it may take per frame (a search from far off needs many)
+STALE_SECONDS = 15.0   # a search running this long, begun much further away than you are now, starts over
 PROGRESS_SECONDS = 8.0 # moving without getting further along the route this long = re-plan
 BEACON_BASE = 56        # 700 Hz at the same height as you
 
@@ -306,7 +307,7 @@ class Route:
         * If you keep walking without getting closer along the route for 8 s, it re-plans and
           says "Recalculating".
         """
-        from .planner import GridPlanner, follow
+        from .planner import GridPlanner, follow, progress
 
         loc = game.location(pawn)
         feet = game.feet_z(pawn)
@@ -333,6 +334,7 @@ class Route:
         # again from here. (A tester stood 3 m from a raised marker while the search
         # begun 70 m back was still going.)
         stale = (pl.state == "running" and self.search_from is not None
+                 and now - getattr(self, "search_began", now) > STALE_SECONDS
                  and self.search_from[2] - gap > max(1500.0, 0.6 * self.search_from[2]))
         if stale:
             self._note("route planner: you've moved on since the search began; searching again from here")
@@ -344,6 +346,7 @@ class Route:
                                f"measured ground {'none' if ground is None else f'{ground:.0f}'}")
             pl.start(start, target_pos, cell=cell, max_cells=self.limit)
             self.search_from = (here[0], here[1], gap)
+            self.search_began = now
             self.replan_at = now + 8.0
         pl.step(PLAN_BUDGET, PLAN_SECONDS)
         if pl.runs != self.runs_seen and pl.state in ("done", "partial", "failed"):
@@ -366,13 +369,16 @@ class Route:
                         return False
             return True
 
-        nxt = follow(self.path, here, visible)
+        self.path_at = progress(self.path, here, getattr(self, "path_at", 0))
+        nxt = follow(self.path, here, visible, at=self.path_at)
         if nxt is None:
             return None
-        # Only ever forward along the route: which far point you can see changes with each step.
+        # Don't slip back along the route just because a far point flickers out of sight for a
+        # step; but only keep the earlier aim while you can still walk straight to it (keeping it
+        # regardless led round corners into walls).
         k = self.path.index(nxt)
         aim = getattr(self, "follow_k", 0)
-        if k < aim < len(self.path):
+        if k < aim < len(self.path) and visible(self.path[aim]):
             nxt = self.path[aim]
         else:
             self.follow_k = k
@@ -437,7 +443,7 @@ class Route:
         else:
             self.limit, self.last_gap = PLAN_CELLS, None
         self.path, self.path_kind, self.path_cell = list(pl.path), pl.state, pl.cell
-        self.follow_k = 0
+        self.follow_k = self.path_at = 0
         self.path_moves = list(getattr(pl, "moves", [])) or ["walk"] * len(self.path)
         n_jump, n_drop = self.path_moves.count("jump"), self.path_moves.count("drop")
         if n_jump or n_drop:

@@ -93,6 +93,9 @@ def call(cls, fn, obj, kind=Type.PRE, **args):
 import math
 import bl2_access.game as G
 import bl2_access.navigation as NAV
+# A fixed number of line tests per frame (in the game it is also limited by time, which would make
+# these walks depend on how busy the computer is)
+NAV.PLAN_SECONDS = None; NAV.PLAN_BUDGET = 400
 import bl2_access.planner as P
 from bl2_access import trace as T
 
@@ -164,7 +167,7 @@ assert ok, (frames, notes[-6:])
 # fine search from where you are)
 assert (any("grid 1.8 m" in n for n in notes) or any("searching again from here" in n for n in notes)) \
     and any("grid 0.9 m" in n for n in notes), notes
-assert frames < 1200, frames   # 56 s before the stale-search restart, 26 s with it
+assert frames < 1200, frames
 assert said and said[0][0].startswith(("Route found", "Heading toward it")), said
 assert worst <= NAV.PLAN_BUDGET + 120, worst              # planner budget plus following/steering checks
 print("into a building from far away OK")

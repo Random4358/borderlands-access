@@ -210,14 +210,14 @@ class Busy:
 r = NAV.Route(); G_.FLOOR_SEEN = True; notes.clear()
 r.planner = Busy(); r.path, r.path_kind, r.limit, r.last_gap = [], "", NAV.PLAN_CELLS, None
 r.runs_seen, r.watch, r.announced = 0, None, False
-r.search_from = (0.0, 0.0, 7000.0)                           # begun 70 m from the target
+r.search_from = (0.0, 0.0, 7000.0); r.search_began = 0.0       # begun 70 m from the target, a while ago
 orig_loc, orig_feet, orig_ground = G_.location, G_.feet_z, G_.ground_z
 G_.location = lambda a: (a.Location.X, a.Location.Y, a.Location.Z)
 G_.feet_z = lambda a: a.Location.Z - 90
 G_.ground_z = lambda a, x, y, z: z - 90
-r._planned(Pw(3000.0, 0.0, 90.0), (7000.0, 0.0, 300.0), 5.0)     # 40 m away now: keep going
+r._planned(Pw(3000.0, 0.0, 90.0), (7000.0, 0.0, 300.0), 20.0)     # 40 m away now: keep going
 assert not r.planner.starts
-r._planned(Pw(6700.0, 0.0, 90.0), (7000.0, 0.0, 300.0), 6.0)     # 3 m away: search again from here
+r._planned(Pw(6700.0, 0.0, 90.0), (7000.0, 0.0, 300.0), 21.0)     # 3 m away: search again from here
 assert len(r.planner.starts) == 1 and any("searching again from here" in n for n in notes), notes
 assert abs(r.search_from[2] - 300.0) < 1
 G_.location, G_.feet_z, G_.ground_z, G_.FLOOR_SEEN = orig_loc, orig_feet, orig_ground, saved_floor
